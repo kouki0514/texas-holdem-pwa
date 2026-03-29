@@ -123,8 +123,6 @@ export const useGameStore = create<GameStore>()(
         ? humanBefore.holeCards.map((c) => ({ ...c }))
         : []
 
-      let pendingPersist: ((...args: unknown[]) => void) | null = null
-
       set((s) => {
         const prevPhase = (s as GameState).phase
         const state = s as GameState
@@ -150,26 +148,26 @@ export const useGameStore = create<GameStore>()(
           next = advanceToNextStreet(next)
         }
 
-        // Record hand stats when showdown is reached
+        // Record session stats when showdown is reached (persist happens outside via setTimeout)
         if (next.phase === 'showdown') {
           const humanPlayer = next.players.find((p) => p.isHuman)
           const humanWon = next.winners.some((w) => humanPlayer && w.winners.includes(humanPlayer.id))
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (s._vpipThisHand) s.sessionStats.vpipHands += 1
-          // Schedule persist outside Immer draft to avoid Proxy serialization issues
-          const vpip = s._vpipThisHand
-          const pfr = s._pfrThisHand
-          pendingPersist = () => persistHandRecord(next, humanHoleCards, vpip, pfr)
         }
 
         Object.assign(s, next)
       })
 
-      if (pendingPersist) pendingPersist()
-
-      // If everyone is all-in after advancing, run out the board with delays
+      // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
       const afterAction = get()
+      if (afterAction.phase === 'showdown') {
+        const vpip = afterAction._vpipThisHand
+        const pfr = afterAction._pfrThisHand
+        setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr), 0)
+      }
+
       if (
         afterAction.phase !== 'showdown' &&
         afterAction.phase !== 'waiting' &&
@@ -190,31 +188,31 @@ export const useGameStore = create<GameStore>()(
         ? humanBefore.holeCards.map((c) => ({ ...c }))
         : []
 
-      let pendingPersist: ((...args: unknown[]) => void) | null = null
-
       set((s) => {
         const state = s as GameState
         if (state.phase === 'showdown' || state.phase === 'waiting') return
         const next = advanceToNextStreet(state)
 
-        // Record hand stats when runout reaches showdown
+        // Record session stats when runout reaches showdown (persist happens outside via setTimeout)
         if (next.phase === 'showdown') {
           const humanPlayer = next.players.find((p) => p.isHuman)
           const humanWon = next.winners.some((w) => humanPlayer && w.winners.includes(humanPlayer.id))
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (s._vpipThisHand) s.sessionStats.vpipHands += 1
-          const vpip = s._vpipThisHand
-          const pfr = s._pfrThisHand
-          pendingPersist = () => persistHandRecord(next, humanHoleCards, vpip, pfr)
         }
 
         Object.assign(s, next)
       })
 
-      if (pendingPersist) pendingPersist()
-
+      // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
       const afterAdvance = get()
+      if (afterAdvance.phase === 'showdown') {
+        const vpip = afterAdvance._vpipThisHand
+        const pfr = afterAdvance._pfrThisHand
+        setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr), 0)
+      }
+
       // If still no one can act (more streets remaining), schedule next reveal
       if (afterAdvance.phase !== 'showdown' && afterAdvance.activePlayerIndex === -1) {
         scheduleRunout(get)
