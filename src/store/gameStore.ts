@@ -331,11 +331,16 @@ function persistHandRecord(
     }
   }
 
-  // Hand rank — only meaningful when there was a real showdown with 5 community cards
-  // Skip evaluation if pot was uncontested (everyone else folded) to avoid bogus ranks
-  const isUncontested = state.winners.some((w) => w.isUncontested)
+  // Hand rank — only evaluate when human reached a genuine showdown:
+  //   1. communityCards must be 5 (river was dealt)
+  //   2. human must not have folded (isFolded check on final state)
+  //   3. pot must have been contested (isUncontested means everyone else folded)
+  const wasShowdown =
+    state.communityCards.length === 5 &&
+    !human.isFolded &&
+    !state.winners.some((w) => w.isUncontested)
   let handRank = null
-  if (!isUncontested && state.communityCards.length === 5) {
+  if (wasShowdown) {
     try {
       const result = evaluateHand(holeCards as [Card, Card], state.communityCards)
       handRank = result.rank
