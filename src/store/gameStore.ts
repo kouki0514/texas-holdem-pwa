@@ -61,6 +61,8 @@ interface GameStore extends GameState {
   _vpipThisHand: boolean
   /** Whether the human raised preflop this hand (for PFR tracking) */
   _pfrThisHand: boolean
+  /** Human's chip count at the start of the current hand (for accurate net P&L) */
+  _chipsAtHandStart: number
 
   initGame: (players: Player[]) => void
   startNewHand: () => void
@@ -88,6 +90,7 @@ export const useGameStore = create<GameStore>()(
     sessionStats: { initialChips: 0, handsPlayed: 0, handsWon: 0, vpipHands: 0 },
     _vpipThisHand: false,
     _pfrThisHand: false,
+    _chipsAtHandStart: 0,
 
     initGame(players) {
       const human = players.find((p) => p.isHuman)
@@ -106,10 +109,13 @@ export const useGameStore = create<GameStore>()(
     },
 
     startNewHand() {
+      const humanBeforeHand = get().players.find((p) => p.isHuman)
+      const chipsNow = humanBeforeHand?.chips ?? 0
       set((s) => {
         Object.assign(s, startHand(s as GameState))
         s._vpipThisHand = false
         s._pfrThisHand = false
+        s._chipsAtHandStart = chipsNow
       })
       scheduleAiIfNeeded(get)
     },
@@ -166,7 +172,8 @@ export const useGameStore = create<GameStore>()(
       if (afterAction.phase === 'showdown') {
         const vpip = afterAction._vpipThisHand
         const pfr = afterAction._pfrThisHand
-        setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr), 0)
+        const chipsAtHandStart = afterAction._chipsAtHandStart
+        setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
       if (
@@ -211,7 +218,8 @@ export const useGameStore = create<GameStore>()(
       if (afterAdvance.phase === 'showdown') {
         const vpip = afterAdvance._vpipThisHand
         const pfr = afterAdvance._pfrThisHand
-        setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr), 0)
+        const chipsAtHandStart = afterAdvance._chipsAtHandStart
+        setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
       // If still no one can act (more streets remaining), schedule next reveal
@@ -319,17 +327,14 @@ function persistHandRecord(
   holeCards: Card[],  // captured before applyAction (fold clears them on the player object)
   vpip: boolean,
   pfr: boolean,
+  chipsAtHandStart: number,
 ) {
   const human = state.players.find((p) => p.isHuman)
   if (!human || holeCards.length !== 2) return
 
-  // Net chips: sum of pots won minus total invested
-  let net = -human.totalBetThisHand
-  for (const w of state.winners) {
-    if (w.winners.includes(human.id)) {
-      net += Math.floor(w.amount / w.winners.length)
-    }
-  }
+  // Net chips: chips after showdown (pot already awarded) minus chips before this hand started.
+  // This is the most reliable calculation as it does not depend on pot/winners accounting.
+  const net = human.chips - chipsAtHandStart
 
   // Hand rank — only evaluate when human reached a genuine showdown:
   //   1. communityCards must be 5 (river was dealt)

@@ -193,15 +193,13 @@ export function StatsScreen({ onClose }: Props) {
               <p className="text-white/30 text-center py-4 text-sm">ハンド履歴がありません</p>
             )}
 
-            {/* Clear button */}
-            {hands.length > 0 && (
-              <button
-                onClick={handleClear}
-                className="self-end text-xs text-white/30 hover:text-red-400 transition-colors"
-              >
-                履歴を全削除
-              </button>
-            )}
+            {/* Clear button — always visible so stale data can be reset */}
+            <button
+              onClick={handleClear}
+              className="self-end text-xs text-white/30 hover:text-red-400 transition-colors"
+            >
+              履歴を全削除
+            </button>
           </>
         )}
       </div>
