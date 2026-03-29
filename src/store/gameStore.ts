@@ -115,13 +115,19 @@ export const useGameStore = create<GameStore>()(
     },
 
     playerAction(action, amount) {
+      // Capture human's holeCards as plain objects BEFORE entering Immer draft
+      // (fold clears holeCards; Immer Proxy objects cannot be stored in IndexedDB)
+      const stateSnapshot = get()
+      const humanBefore = stateSnapshot.players.find((p) => p.isHuman)
+      const humanHoleCards: Card[] = humanBefore
+        ? humanBefore.holeCards.map((c) => ({ ...c }))
+        : []
+
+      let pendingPersist: (() => void) | null = null
+
       set((s) => {
         const prevPhase = (s as GameState).phase
         const state = s as GameState
-
-        // Capture human's holeCards BEFORE applyAction (fold clears them)
-        const humanBefore = state.players.find((p) => p.isHuman)
-        const humanHoleCards = humanBefore ? [...humanBefore.holeCards] as typeof humanBefore.holeCards : []
 
         let next: GameState = applyAction(state, action, amount)
 
@@ -151,11 +157,16 @@ export const useGameStore = create<GameStore>()(
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (s._vpipThisHand) s.sessionStats.vpipHands += 1
-          persistHandRecord(next, humanHoleCards, s._vpipThisHand, s._pfrThisHand)
+          // Schedule persist outside Immer draft to avoid Proxy serialization issues
+          const vpip = s._vpipThisHand
+          const pfr = s._pfrThisHand
+          pendingPersist = () => persistHandRecord(next, humanHoleCards, vpip, pfr)
         }
 
         Object.assign(s, next)
       })
+
+      pendingPersist?.()
 
       // If everyone is all-in after advancing, run out the board with delays
       const afterAction = get()
@@ -171,12 +182,19 @@ export const useGameStore = create<GameStore>()(
     },
 
     advanceRunout() {
+      // Capture human's holeCards as plain objects BEFORE entering Immer draft
+      const stateSnapshot = get()
+      if (stateSnapshot.phase === 'showdown' || stateSnapshot.phase === 'waiting') return
+      const humanBefore = stateSnapshot.players.find((p) => p.isHuman)
+      const humanHoleCards: Card[] = humanBefore
+        ? humanBefore.holeCards.map((c) => ({ ...c }))
+        : []
+
+      let pendingPersist: (() => void) | null = null
+
       set((s) => {
         const state = s as GameState
         if (state.phase === 'showdown' || state.phase === 'waiting') return
-        // advanceToNextStreet handles river→showdown via resolveShowdown internally
-        const humanBefore = state.players.find((p) => p.isHuman)
-        const humanHoleCards = humanBefore ? [...humanBefore.holeCards] as typeof humanBefore.holeCards : []
         const next = advanceToNextStreet(state)
 
         // Record hand stats when runout reaches showdown
@@ -186,11 +204,15 @@ export const useGameStore = create<GameStore>()(
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (s._vpipThisHand) s.sessionStats.vpipHands += 1
-          persistHandRecord(next, humanHoleCards, s._vpipThisHand, s._pfrThisHand)
+          const vpip = s._vpipThisHand
+          const pfr = s._pfrThisHand
+          pendingPersist = () => persistHandRecord(next, humanHoleCards, vpip, pfr)
         }
 
         Object.assign(s, next)
       })
+
+      pendingPersist?.()
 
       const afterAdvance = get()
       // If still no one can act (more streets remaining), schedule next reveal
