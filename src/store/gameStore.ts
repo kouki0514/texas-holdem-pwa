@@ -166,7 +166,7 @@ export const useGameStore = create<GameStore>()(
         Object.assign(s, next)
       })
 
-      pendingPersist?.()
+      if (pendingPersist) pendingPersist()
 
       // If everyone is all-in after advancing, run out the board with delays
       const afterAction = get()
@@ -212,7 +212,7 @@ export const useGameStore = create<GameStore>()(
         Object.assign(s, next)
       })
 
-      pendingPersist?.()
+      if (pendingPersist) pendingPersist()
 
       const afterAdvance = get()
       // If still no one can act (more streets remaining), schedule next reveal
