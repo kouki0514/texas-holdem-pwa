@@ -123,7 +123,7 @@ export const useGameStore = create<GameStore>()(
         ? humanBefore.holeCards.map((c) => ({ ...c }))
         : []
 
-      let pendingPersist: (() => void) | null = null
+      let pendingPersist: ((...args: unknown[]) => void) | null = null
 
       set((s) => {
         const prevPhase = (s as GameState).phase
@@ -190,7 +190,7 @@ export const useGameStore = create<GameStore>()(
         ? humanBefore.holeCards.map((c) => ({ ...c }))
         : []
 
-      let pendingPersist: (() => void) | null = null
+      let pendingPersist: ((...args: unknown[]) => void) | null = null
 
       set((s) => {
         const state = s as GameState
