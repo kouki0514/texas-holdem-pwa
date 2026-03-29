@@ -8,8 +8,8 @@ exports.handleReconnect = handleReconnect;
 const config_1 = require("./config");
 const claudeServer_1 = require("./claudeServer");
 const roomManager_1 = require("./roomManager");
-const aiPlayer_1 = require("@/ai/aiPlayer");
-const gameEngine_1 = require("@/game/gameEngine");
+const aiPlayer_1 = require("../src/ai/aiPlayer");
+const gameEngine_1 = require("../src/game/gameEngine");
 // ──────────────────────────────────────────────────────────────────────────────
 // Hole card filtering — opponents see only face-down placeholders
 // ──────────────────────────────────────────────────────────────────────────────

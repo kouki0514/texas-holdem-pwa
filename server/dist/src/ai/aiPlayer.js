@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.decideAction = decideAction;
-const deck_1 = require("@/game/deck");
+const deck_1 = require("../game/deck");
 // ──────────────────────────────────────────────
 // Simple hand strength heuristic (pre-flop)
 // ──────────────────────────────────────────────
