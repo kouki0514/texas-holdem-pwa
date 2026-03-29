@@ -162,9 +162,7 @@ export function StatsScreen({ onClose }: Props) {
                       <th className="text-left pb-1 pr-2">#</th>
                       <th className="text-left pb-1 pr-2">ホールカード</th>
                       <th className="text-left pb-1 pr-2">役</th>
-                      <th className="text-right pb-1 pr-2">損益</th>
-                      <th className="text-center pb-1 pr-2">VPIP</th>
-                      <th className="text-center pb-1">PFR</th>
+                      <th className="text-right pb-1">損益</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -183,11 +181,9 @@ export function StatsScreen({ onClose }: Props) {
                         <td className="py-1 pr-2 text-white/70">
                           {h.handRank ? HAND_RANK_JA[h.handRank] : '—'}
                         </td>
-                        <td className={`py-1 pr-2 text-right font-mono font-bold ${h.netChips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <td className={`py-1 text-right font-mono font-bold ${h.netChips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {h.netChips >= 0 ? '+' : ''}{h.netChips}
                         </td>
-                        <td className="py-1 pr-2 text-center">{h.vpip ? '✓' : ''}</td>
-                        <td className="py-1 text-center">{h.pfr ? '✓' : ''}</td>
                       </tr>
                     ))}
                   </tbody>

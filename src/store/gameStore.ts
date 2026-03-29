@@ -123,24 +123,22 @@ export const useGameStore = create<GameStore>()(
         ? humanBefore.holeCards.map((c) => ({ ...c }))
         : []
 
+      // VPIP/PFR: track before entering Immer draft so Object.assign(s, next) cannot overwrite flags
+      // Only count when the active player is human (AI actions also route through playerAction)
+      const activePlayer = stateSnapshot.players[stateSnapshot.activePlayerIndex]
+      const isHumanPreflop = activePlayer?.isHuman && stateSnapshot.phase === 'preflop'
+      const vpipNow = stateSnapshot._vpipThisHand ||
+        (isHumanPreflop && (action === 'call' || action === 'raise' || action === 'all-in'))
+      const pfrNow = stateSnapshot._pfrThisHand ||
+        (isHumanPreflop && (action === 'raise' || action === 'all-in'))
+
       set((s) => {
-        const prevPhase = (s as GameState).phase
         const state = s as GameState
 
-        let next: GameState = applyAction(state, action, amount)
+        s._vpipThisHand = vpipNow
+        s._pfrThisHand = pfrNow
 
-        // VPIP: human voluntarily put chips in preflop (call/raise/all-in, not BB post)
-        // PFR:  human raised preflop
-        // Only track when the ACTIVE player is the human (not AI actions routed through playerAction)
-        const activePlayer = state.players[state.activePlayerIndex]
-        if (activePlayer?.isHuman && prevPhase === 'preflop') {
-          if (!s._vpipThisHand && (action === 'call' || action === 'raise' || action === 'all-in')) {
-            s._vpipThisHand = true
-          }
-          if (!s._pfrThisHand && (action === 'raise' || action === 'all-in')) {
-            s._pfrThisHand = true
-          }
-        }
+        let next: GameState = applyAction(state, action, amount)
 
         if (isHandOver(next)) {
           next = resolveShowdown(next)
@@ -154,10 +152,13 @@ export const useGameStore = create<GameStore>()(
           const humanWon = next.winners.some((w) => humanPlayer && w.winners.includes(humanPlayer.id))
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
-          if (s._vpipThisHand) s.sessionStats.vpipHands += 1
+          if (vpipNow) s.sessionStats.vpipHands += 1
         }
 
         Object.assign(s, next)
+        // Restore flags overwritten by Object.assign (next is GameState, has no _vpipThisHand)
+        s._vpipThisHand = vpipNow
+        s._pfrThisHand = pfrNow
       })
 
       // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
