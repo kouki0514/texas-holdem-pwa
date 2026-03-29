@@ -63,6 +63,8 @@ interface GameStore extends GameState {
   _pfrThisHand: boolean
   /** Human's chip count at the start of the current hand (for accurate net P&L) */
   _chipsAtHandStart: number
+  /** Whether the hand record has already been persisted this hand (prevent double-write) */
+  _handPersisted: boolean
 
   initGame: (players: Player[]) => void
   startNewHand: () => void
@@ -91,6 +93,7 @@ export const useGameStore = create<GameStore>()(
     _vpipThisHand: false,
     _pfrThisHand: false,
     _chipsAtHandStart: 0,
+    _handPersisted: false,
 
     initGame(players) {
       const human = players.find((p) => p.isHuman)
@@ -116,6 +119,7 @@ export const useGameStore = create<GameStore>()(
         s._vpipThisHand = false
         s._pfrThisHand = false
         s._chipsAtHandStart = chipsNow
+        s._handPersisted = false
       })
       scheduleAiIfNeeded(get)
     },
@@ -138,6 +142,10 @@ export const useGameStore = create<GameStore>()(
       const pfrNow = stateSnapshot._pfrThisHand ||
         (isHumanPreflop && (action === 'raise' || action === 'all-in'))
 
+      // Is the human the one folding right now?
+      const humanIsFolding = stateSnapshot.players[stateSnapshot.activePlayerIndex]?.isHuman
+        && action === 'fold'
+
       set((s) => {
         const state = s as GameState
 
@@ -152,12 +160,18 @@ export const useGameStore = create<GameStore>()(
           next = advanceToNextStreet(next)
         }
 
-        // Record session stats when showdown is reached (persist happens outside via setTimeout)
-        if (next.phase === 'showdown') {
+        // Record session stats at showdown (covers all endings)
+        if (next.phase === 'showdown' && !s._handPersisted) {
           const humanPlayer = next.players.find((p) => p.isHuman)
           const humanWon = next.winners.some((w) => humanPlayer && w.winners.includes(humanPlayer.id))
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
+          if (vpipNow) s.sessionStats.vpipHands += 1
+        }
+
+        // When human folds mid-hand (others still playing), count it now
+        if (humanIsFolding && next.phase !== 'showdown' && !s._handPersisted) {
+          s.sessionStats.handsPlayed += 1
           if (vpipNow) s.sessionStats.vpipHands += 1
         }
 
@@ -169,10 +183,14 @@ export const useGameStore = create<GameStore>()(
 
       // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
       const afterAction = get()
-      if (afterAction.phase === 'showdown') {
+      const shouldPersistNow =
+        (afterAction.phase === 'showdown' || humanIsFolding) && !afterAction._handPersisted
+      if (shouldPersistNow) {
         const vpip = afterAction._vpipThisHand
         const pfr = afterAction._pfrThisHand
         const chipsAtHandStart = afterAction._chipsAtHandStart
+        // Mark persisted synchronously before setTimeout fires to prevent duplicate writes
+        set((s) => { s._handPersisted = true })
         setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
@@ -215,10 +233,11 @@ export const useGameStore = create<GameStore>()(
 
       // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
       const afterAdvance = get()
-      if (afterAdvance.phase === 'showdown') {
+      if (afterAdvance.phase === 'showdown' && !afterAdvance._handPersisted) {
         const vpip = afterAdvance._vpipThisHand
         const pfr = afterAdvance._pfrThisHand
         const chipsAtHandStart = afterAdvance._chipsAtHandStart
+        set((s) => { s._handPersisted = true })
         setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
