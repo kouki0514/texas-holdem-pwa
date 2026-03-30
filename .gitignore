@@ -5,3 +5,4 @@ dist-ssr
 .env
 .env.*
 server/.env
+.env.local
