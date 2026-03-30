@@ -4,12 +4,25 @@ import { rankToValue } from '@/game/deck'
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
 
 const PREFLOP_RANGES: Record<string, Record<string, string>> = {
-  BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'M',K6s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'M', QJs:'R',QTs:'R',Q9s:'R',Q8s:'M', QJo:'R',QTo:'R',Q9o:'M', JTs:'R',J9s:'R',J8s:'M', JTo:'R',J9o:'M', T9s:'R',T8s:'R',T9o:'M', '98s':'R','97s':'M','98o':'M', '87s':'R','87o':'M', '76s':'R','76o':'M', '65s':'R','54s':'M' },
-  CO:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'M',A5s:'R',A4s:'M',A3s:'M',A2s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'M', KQo:'R',KJo:'R',KTo:'R', QJs:'R',QTs:'R',Q9s:'R', QJo:'R',QTo:'M', JTs:'R',J9s:'R', JTo:'M', T9s:'R',T8s:'M', '98s':'R','87s':'M','76s':'M','65s':'M' },
-  HJ:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'M',55:'M',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'M',A5s:'R',A4s:'M',A3s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R', KQs:'R',KJs:'R',KTs:'R',K9s:'M', KQo:'R',KJo:'R', QJs:'R',QTs:'R',Q9s:'M', JTs:'R',J9s:'M', T9s:'R',T8s:'M', '98s':'M','87s':'M' },
+  BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'M', QJs:'R',QTs:'R',Q9s:'R', QJo:'R',QTo:'R', JTs:'R',J9s:'R', JTo:'R', T9s:'R',T8s:'R', '98s':'R','87s':'R','76s':'R','65s':'R','54s':'M' },
+  CO:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'M',A5s:'R',A4s:'M',A3s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R', KQo:'R',KJo:'R',KTo:'R', QJs:'R',QTs:'R',Q9s:'R', QJo:'R', JTs:'R',J9s:'R', T9s:'R','98s':'R','87s':'M','76s':'M','65s':'M' },
+  HJ:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'M',55:'M',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'M',A5s:'R',A4s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R', KQs:'R',KJs:'R',KTs:'R',K9s:'M', KQo:'R',KJo:'R', QJs:'R',QTs:'R', JTs:'R', T9s:'R','98s':'M','87s':'M' },
   UTG: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'M',66:'M',55:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'M',A5s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'M', KQs:'R',KJs:'R',KTs:'M', KQo:'R',KJo:'M', QJs:'R',QTs:'M', JTs:'R', T9s:'M' },
-  SB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'M',A6s:'M',A5s:'R',A4s:'M',A3s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'M', KQo:'R',KJo:'R', QJs:'R',QTs:'R', JTs:'R', T9s:'R','98s':'M','87s':'M','76s':'M' },
-  BB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'M', KQo:'R',KJo:'R',KTo:'M', QJs:'R',QTs:'R',Q9s:'M', JTs:'R',J9s:'M', T9s:'R','98s':'M','87s':'M','76s':'M','65s':'M','54s':'M' },
+  SB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'M',A5s:'R',A4s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'M', KQs:'R',KJs:'R',KTs:'R', KQo:'R',KJo:'R', QJs:'R',QTs:'R', JTs:'R', T9s:'R','98s':'M','87s':'M','76s':'M' },
+  BB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R', KQs:'R',KJs:'R',KTs:'R',K9s:'R', KQo:'R',KJo:'R',KTo:'M', QJs:'R',QTs:'R', JTs:'R', T9s:'R','98s':'M','87s':'M','76s':'M','65s':'M','54s':'M' },
+}
+
+// ディーラーインデックスとプレイヤーインデックスからポジション名を計算
+function getPosition(playerIndex: number, dealerIndex: number, totalPlayers: number): string {
+  const n = totalPlayers
+  const relative = (playerIndex - dealerIndex + n) % n
+  if (n === 2) return relative === 0 ? 'BTN' : 'BB'
+  if (n === 3) { return ['BTN','SB','BB'][relative] ?? 'BTN' }
+  if (n === 4) { return ['BTN','SB','BB','UTG'][relative] ?? 'BTN' }
+  if (n === 5) { return ['BTN','SB','BB','UTG','HJ'][relative] ?? 'BTN' }
+  // 6人以上
+  const map = ['BTN','SB','BB','UTG','HJ','CO']
+  return map[relative % map.length] ?? 'BTN'
 }
 
 function handToKey(player: Player): string | null {
@@ -33,14 +46,15 @@ function preflopAction(
   player: Player,
   difficulty: AiDifficulty
 ): { action: ActionType; amount?: number } | null {
-  const position = player.position
-  if (!position) return null
+  const playerIndex = state.players.findIndex(p => p.id === player.id)
+  if (playerIndex === -1) return null
+  const position = getPosition(playerIndex, state.dealerIndex, state.players.length)
   const range = PREFLOP_RANGES[position]
   if (!range) return null
   const key = handToKey(player)
   if (!key) return null
   const signal = range[key] ?? 'F'
-  const toCall  = state.currentBet - player.currentBet
+  const toCall   = state.currentBet - player.currentBet
   const canCheck = toCall === 0
 
   const resolvedSignal = signal === 'M'
