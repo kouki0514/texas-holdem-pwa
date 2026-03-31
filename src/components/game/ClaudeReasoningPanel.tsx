@@ -18,17 +18,17 @@ const SUIT_SYMBOL: { [key: string]: string } = { s: '♠', h: '♥', d: '♦', c
 const SUIT_COLOR:  { [key: string]: string } = { s: 'text-white', h: 'text-red-400', d: 'text-red-400', c: 'text-white' }
 const RANK_LABEL: { [key: string]: string } = { T: '10', J: 'J', Q: 'Q', K: 'K', A: 'A' }
 
-const HAND_RANK_JP: { [key: number]: string } = {
-  8: 'ロイヤルフラッシュ',
-  7: 'ストレートフラッシュ',
-  6: 'フォーカード',
-  5: 'フルハウス',
-  4: 'フラッシュ',
-  3: 'ストレート',
-  2: 'スリーカード',
-  1: 'ツーペア',
-  0: 'ワンペア',
-  // ハイカード = rank undefined or -1
+const HAND_RANK_JP: { [key: string]: string } = {
+  'royal-flush':    'ロイヤルフラッシュ',
+  'straight-flush': 'ストレートフラッシュ',
+  'four-of-a-kind': 'フォーカード',
+  'full-house':     'フルハウス',
+  'flush':          'フラッシュ',
+  'straight':       'ストレート',
+  'three-of-a-kind':'スリーカード',
+  'two-pair':       'ツーペア',
+  'one-pair':       'ワンペア',
+  'high-card':      'ハイカード',
 }
 
 function rankLabel(r: string) { return RANK_LABEL[r] ?? r }
@@ -46,7 +46,7 @@ function getHandJp(holeCards: Card[], communityCards: Card[]): string {
   if (holeCards.length < 2 || communityCards.length < 3) return '—'
   try {
     const result = evaluateHand(holeCards as [Card, Card], communityCards)
-    return HAND_RANK_JP[result.rank as number] ?? 'ハイカード'
+    return HAND_RANK_JP[result.rank as string] ?? 'ハイカード'
   } catch {
     return '—'
   }
