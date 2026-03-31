@@ -50,9 +50,10 @@ function CardChip({ card, size = 'sm' }: { card: Card; size?: 'sm' | 'md' }) {
       </span>
     )
   }
+  // sm: 白背景でスートの色が見やすいように統一
   return (
-    <span className={`inline-flex items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1 py-0.5 text-xs font-bold text-white`}>
-      <span>{rank}</span><span className={color}>{symbol}</span>
+    <span className={`inline-flex items-center gap-0.5 bg-white rounded px-1 py-0.5 text-xs font-bold border border-gray-300 shadow-sm ${color}`}>
+      <span>{rank}</span><span>{symbol}</span>
     </span>
   )
 }
@@ -159,13 +160,14 @@ function TimelineCard({ entry }: { entry: ReasoningEntry }) {
 interface HandSummaryProps {
   handNumber: number
   entries: ReasoningEntry[]
+  humanPlayerId: string
   /** Net chips for the human player this hand (undefined = unknown) */
   netChips?: number
   /** Default expanded state */
   defaultExpanded?: boolean
 }
 
-function HandSummary({ handNumber, entries, netChips, defaultExpanded = false }: HandSummaryProps) {
+function HandSummary({ handNumber, entries, humanPlayerId, netChips, defaultExpanded = false }: HandSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
 
   const community = entries.reduce<Card[]>(
@@ -173,20 +175,36 @@ function HandSummary({ handNumber, entries, netChips, defaultExpanded = false }:
     []
   )
 
-  // Humanエントリを探す
-  const humanEntries = entries.filter(isHumanEntry)
-  const humanFirst   = humanEntries[0]
-  const humanHoleCards: Card[] = humanFirst?.holeCards ?? []
+  // Human エントリを取得（フォールバック3段階）
+  // 1) reasoning==='' のエントリ（playerAction で記録した人間アクション）
+  // 2) なければ humanPlayerId に一致するエントリで holeCards が空でないもの
+  // 3) それもなければ humanPlayerId に一致する任意のエントリ
+  const humanEntriesByReasoning = entries.filter((e) => e.playerId === humanPlayerId && isHumanEntry(e))
+  const humanEntriesById = entries.filter((e) => e.playerId === humanPlayerId)
+
+  const humanWithCards =
+    humanEntriesByReasoning.find((e) => e.holeCards.length > 0) ??
+    humanEntriesById.find((e) => e.holeCards.length > 0)
+
+  const humanFirst = humanWithCards ?? humanEntriesByReasoning[0] ?? humanEntriesById[0]
+
+  const humanHoleCards: Card[] = humanFirst?.holeCards?.length
+    ? humanFirst.holeCards
+    : []
+
   const humanPosition: string | null = humanFirst?.position ?? null
   const handJp = getHandJp(humanHoleCards, community)
 
   // タイムラインはtimestamp順
   const timeline = [...entries].sort((a, b) => a.timestamp - b.timestamp)
 
+  // ネット損益は undefined でも常にラベル表示（±0含む）
   const netLabel = netChips != null
-    ? netChips >= 0
-      ? <span className="text-green-400 font-mono text-xs">+{netChips}</span>
-      : <span className="text-red-400 font-mono text-xs">{netChips}</span>
+    ? netChips > 0
+      ? <span className="text-green-400 font-mono text-xs font-bold">+{netChips}</span>
+      : netChips < 0
+        ? <span className="text-red-400 font-mono text-xs font-bold">{netChips}</span>
+        : <span className="text-white/50 font-mono text-xs">±0</span>
     : null
 
   return (
@@ -293,7 +311,7 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
       {sortedHands.map(([hn, entries], i) => {
-        // 現在のハンドのみネット損益を計算できる
+        // 現在のハンドはchipsAtHandStartから計算、過去ハンドはundefined
         let netChips: number | undefined
         if (hn === handNumber && humanPlayer != null && chipsAtHandStart > 0) {
           netChips = humanPlayer.chips - chipsAtHandStart
@@ -303,8 +321,9 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
             key={hn}
             handNumber={hn}
             entries={entries}
+            humanPlayerId={humanPlayer?.id ?? ''}
             netChips={netChips}
-            defaultExpanded={i === 0}  // 最新ハンドのみデフォルト展開
+            defaultExpanded={i === 0}
           />
         )
       })}
