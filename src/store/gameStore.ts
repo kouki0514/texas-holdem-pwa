@@ -153,6 +153,41 @@ export const useGameStore = create<GameStore>()(
       const humanIsFolding = stateSnapshot.players[stateSnapshot.activePlayerIndex]?.isHuman
         && action === 'fold'
 
+      // Record human action into reasoningLog so it appears in the AI thought timeline
+      if (activePlayer?.isHuman) {
+        const n = stateSnapshot.players.length
+        const d = stateSnapshot.dealerIndex
+        const idx = stateSnapshot.activePlayerIndex
+        const rel = n < 2 ? -1 : (idx - d + n) % n
+        let position: string | null = null
+        if (n >= 2) {
+          if (n === 2) position = rel === 0 ? 'BTN/SB' : 'BB'
+          else {
+            const posMap: Record<number, string> = { 0: 'BTN', 1: 'SB', 2: 'BB' }
+            if (rel in posMap) position = posMap[rel]
+            else if (rel === n - 1) position = 'CO'
+            else position = 'MP'
+          }
+        }
+        const humanEntry: import('@/store/gameStore').ReasoningEntry = {
+          playerId: activePlayer.id,
+          playerName: activePlayer.name,
+          action,
+          amount,
+          reasoning: '',
+          handNumber: stateSnapshot.handNumber,
+          timestamp: Date.now(),
+          communityCards: stateSnapshot.communityCards.map((c) => ({ ...c })),
+          holeCards: humanHoleCards,
+          phase: stateSnapshot.phase,
+          position,
+        }
+        set((s) => {
+          s.latestReasoning[activePlayer.id] = humanEntry
+          s.reasoningLog.push(humanEntry)
+        })
+      }
+
       set((s) => {
         const state = s as GameState
 

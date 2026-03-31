@@ -1,5 +1,5 @@
 import { useGameStore, type ReasoningEntry } from '@/store/gameStore'
-import type { Card, PlayerAction } from '@/game/types'
+import type { Card } from '@/game/types'
 import { evaluateHand } from '@/game/handEvaluator'
 
 const ACTION_STYLE: { [key: string]: string } = {
@@ -98,7 +98,7 @@ function BoardCards({ community }: { community: Card[] }) {
   )
 }
 
-// プレイヤーごとのホールカード行
+// プレイヤーごとのホールカード行（AIプレイヤーのみ）
 function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; community: Card[] }) {
   const last      = entries[entries.length - 1]
   const holeCards = last.holeCards ?? []
@@ -125,30 +125,18 @@ function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; communit
   )
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Timeline item types
-// ──────────────────────────────────────────────────────────────────────────────
-
-type AiTimelineItem = { kind: 'ai'; entry: ReasoningEntry }
-type HumanTimelineItem = {
-  kind: 'human'
-  playerName: string
-  action: PlayerAction['action']
-  amount?: number
-  holeCards: Card[]
-  phase: string
-  timestamp: number
-}
-type TimelineItem = AiTimelineItem | HumanTimelineItem
-
-// AIアクション詳細カード
-function AiActionCard({ entry }: { entry: ReasoningEntry }) {
+// タイムラインカード（AI・人間共通）
+function TimelineCard({ entry, isHuman }: { entry: ReasoningEntry; isHuman: boolean }) {
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
+  const containerCls = isHuman
+    ? 'rounded-lg border border-green-700/30 bg-green-900/10 p-2.5'
+    : 'rounded-lg border border-white/10 bg-black/30 p-2.5 space-y-1.5'
+  const nameCls = isHuman ? 'text-sm font-semibold text-green-300' : 'text-sm font-semibold text-white'
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30 p-2.5 space-y-1.5">
+    <div className={containerCls}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-semibold text-white">{entry.playerName}</span>
+        <span className={nameCls}>{entry.playerName}</span>
         <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
           {entry.action}{amtLabel}
         </span>
@@ -157,7 +145,7 @@ function AiActionCard({ entry }: { entry: ReasoningEntry }) {
             {entry.phase}
           </span>
         )}
-        {entry.position && (
+        {!isHuman && entry.position && (
           <span className="text-[10px] text-orange-300/80 bg-orange-900/20 border border-orange-700/30 rounded px-1.5 py-0.5 font-mono">
             {entry.position}
           </span>
@@ -168,74 +156,32 @@ function AiActionCard({ entry }: { entry: ReasoningEntry }) {
           </div>
         )}
       </div>
-      {entry.reasoning && (
+      {!isHuman && entry.reasoning && (
         <p className="text-xs text-white/70 leading-relaxed">{entry.reasoning}</p>
       )}
     </div>
   )
 }
 
-// 人間プレイヤーアクションカード
-function HumanActionCard({ item }: { item: HumanTimelineItem }) {
-  const badgeStyle = ACTION_STYLE[item.action] ?? ACTION_STYLE.check
-  const amtLabel   = item.amount != null ? ` ${item.amount}` : ''
-  return (
-    <div className="rounded-lg border border-green-700/30 bg-green-900/10 p-2.5">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-semibold text-green-300">{item.playerName}</span>
-        <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
-          {item.action}{amtLabel}
-        </span>
-        {item.phase && (
-          <span className="text-[10px] text-cyan-400/80 bg-cyan-900/20 border border-cyan-700/30 rounded px-1.5 py-0.5 font-mono uppercase">
-            {item.phase}
-          </span>
-        )}
-        {item.holeCards.length > 0 && (
-          <div className="flex gap-1 ml-1">
-            {item.holeCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
 // ハンドまとめ
-// ──────────────────────────────────────────────────────────────────────────────
-
-interface HandSummaryProps {
-  handNumber: number
-  aiEntries: ReasoningEntry[]
-  humanActions: HumanTimelineItem[]
-}
-
-function HandSummary({ handNumber, aiEntries, humanActions }: HandSummaryProps) {
+function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
   // 全エントリの中で最大枚数のcommunityCardsを使う
-  const community = aiEntries.reduce<Card[]>(
+  const community = entries.reduce<Card[]>(
     (best, e) => (e.communityCards ?? []).length > best.length ? (e.communityCards ?? []) : best,
     []
   )
 
-  // プレイヤーごとのホールカード行用マップ（AIのみ：人間はtimeline内で表示）
-  const playerMap = new Map<string, ReasoningEntry[]>()
-  for (const e of aiEntries) {
-    if (!playerMap.has(e.playerId)) playerMap.set(e.playerId, [])
-    playerMap.get(e.playerId)!.push(e)
+  // AIプレイヤーのみホールカード行に表示（reasoning があるエントリ）
+  const aiPlayerMap = new Map<string, ReasoningEntry[]>()
+  for (const e of entries) {
+    if (e.reasoning !== '') {
+      if (!aiPlayerMap.has(e.playerId)) aiPlayerMap.set(e.playerId, [])
+      aiPlayerMap.get(e.playerId)!.push(e)
+    }
   }
 
-  // タイムラインをtimestampでマージ・ソート
-  const timeline: TimelineItem[] = [
-    ...aiEntries.map((e): AiTimelineItem => ({ kind: 'ai', entry: e })),
-    ...humanActions.map((h): HumanTimelineItem => ({ ...h, kind: 'human' as const })),
-  ].sort((a, b) => {
-    const ta = a.kind === 'ai' ? a.entry.timestamp : a.timestamp
-    const tb = b.kind === 'ai' ? b.entry.timestamp : b.timestamp
-    return ta - tb
-  })
-
-  const totalActions = aiEntries.length + humanActions.length
+  // タイムラインはtimestamp順（reasoningLogに追加順なのでほぼ保証されているが念のため）
+  const timeline = [...entries].sort((a, b) => a.timestamp - b.timestamp)
 
   return (
     <div className="rounded-xl border border-white/15 bg-white/5 overflow-hidden">
@@ -244,16 +190,16 @@ function HandSummary({ handNumber, aiEntries, humanActions }: HandSummaryProps) 
         <span className="text-xs font-bold text-purple-300 font-mono uppercase tracking-widest">
           Hand #{handNumber}
         </span>
-        <span className="text-xs text-white/40">{totalActions} アクション</span>
+        <span className="text-xs text-white/40">{entries.length} アクション</span>
       </div>
 
       {/* ボードカード */}
       <BoardCards community={community} />
 
       {/* AIプレイヤーホールカード一覧 */}
-      {playerMap.size > 0 && (
+      {aiPlayerMap.size > 0 && (
         <div className="border-b border-white/10">
-          {[...playerMap.entries()].map(([playerId, pEntries]) => (
+          {[...aiPlayerMap.entries()].map(([playerId, pEntries]) => (
             <PlayerRow key={playerId} entries={pEntries} community={community} />
           ))}
         </div>
@@ -261,11 +207,13 @@ function HandSummary({ handNumber, aiEntries, humanActions }: HandSummaryProps) 
 
       {/* タイムライン */}
       <div className="px-3 py-2 space-y-1.5">
-        {timeline.map((item, i) =>
-          item.kind === 'ai'
-            ? <AiActionCard key={`ai-${item.entry.playerId}-${item.entry.timestamp}`} entry={item.entry} />
-            : <HumanActionCard key={`human-${item.timestamp}-${i}`} item={item} />
-        )}
+        {timeline.map((entry) => (
+          <TimelineCard
+            key={`${entry.playerId}-${entry.timestamp}`}
+            entry={entry}
+            isHuman={entry.reasoning === ''}
+          />
+        ))}
       </div>
     </div>
   )
@@ -298,61 +246,21 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
   const reasoningLog   = useGameStore((s) => s.reasoningLog)
   const players        = useGameStore((s) => s.players)
   const activeIdx      = useGameStore((s) => s.activePlayerIndex)
-  const actionHistory  = useGameStore((s) => s.actionHistory)
-  const handNumber     = useGameStore((s) => s.handNumber)
 
   if (!claudeEnabled) return null
 
   const thinkingPlayer = claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
 
-  // 人間プレイヤーを特定
-  const humanPlayer = players.find((p) => p.isHuman)
-
-  // AIログをhandNumberでグループ化
-  const filteredAi = focusPlayerId
+  const filtered = focusPlayerId
     ? reasoningLog.filter((e) => e.playerId === focusPlayerId)
     : reasoningLog
 
   const byHand = new Map<number, ReasoningEntry[]>()
-  for (const e of filteredAi) {
+  for (const e of filtered) {
     if (!byHand.has(e.handNumber)) byHand.set(e.handNumber, [])
     byHand.get(e.handNumber)!.push(e)
   }
-
-  // 人間のアクションを現在のhandNumberに紐付ける
-  // actionHistoryは現在のハンドのみ保持されるため handNumber をキーにする
-  const humanTimelineItems: HumanTimelineItem[] = humanPlayer
-    ? actionHistory
-        .filter((a) => a.playerId === humanPlayer.id)
-        .map((a) => {
-          // phaseをtimestampが近いAIエントリから補完（なければ空文字）
-          const nearestAi = filteredAi
-            .filter((e) => e.handNumber === handNumber)
-            .reduce<ReasoningEntry | null>((best, e) => {
-              if (!best) return e
-              return Math.abs(e.timestamp - a.timestamp) < Math.abs(best.timestamp - a.timestamp) ? e : best
-            }, null)
-          return {
-            kind: 'human' as const,
-            playerName: humanPlayer.name,
-            action: a.action,
-            amount: a.amount,
-            holeCards: [...humanPlayer.holeCards],
-            phase: nearestAi?.phase ?? '',
-            timestamp: a.timestamp,
-          }
-        })
-    : []
-
-  // 現在のhandNumberのhandにhuman actionsを追加
-  const humanByHand = new Map<number, HumanTimelineItem[]>()
-  if (humanTimelineItems.length > 0) {
-    humanByHand.set(handNumber, humanTimelineItems)
-  }
-
-  // 全handNumberを収集してソート
-  const allHandNumbers = new Set([...byHand.keys(), ...humanByHand.keys()])
-  const sortedHands = [...allHandNumbers].sort((a, b) => b - a)
+  const sortedHands = [...byHand.entries()].sort((a, b) => b[0] - a[0])
 
   if (!claudeThinking && sortedHands.length === 0) return null
 
@@ -361,13 +269,8 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
       {claudeThinking && thinkingPlayer && (
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
-      {sortedHands.map((hn) => (
-        <HandSummary
-          key={hn}
-          handNumber={hn}
-          aiEntries={byHand.get(hn) ?? []}
-          humanActions={humanByHand.get(hn) ?? []}
-        />
+      {sortedHands.map(([handNumber, entries]) => (
+        <HandSummary key={handNumber} handNumber={handNumber} entries={entries} />
       ))}
     </div>
   )
