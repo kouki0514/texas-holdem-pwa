@@ -23,8 +23,6 @@ import type { Card } from '@/game/types'
 export interface ReasoningEntry {
   communityCards: import('@/game/types').Card[]
   holeCards: import('@/game/types').Card[]
-  communityCards: import('@/game/types').Card[]
-  holeCards: import('@/game/types').Card[]
   playerId: string
   playerName: string
   action: ActionType
@@ -276,6 +274,8 @@ export const useGameStore = create<GameStore>()(
               reasoning: decision.reasoning,
               handNumber: state.handNumber,
               timestamp: Date.now(),
+              communityCards: [...state.communityCards],
+              holeCards: [...(player.holeCards.length > 0 ? player.holeCards : (state.players.find(p => p.id === player.id)?.holeCards ?? []))],
             }
             set((s) => {
               s.claudeThinking = false
