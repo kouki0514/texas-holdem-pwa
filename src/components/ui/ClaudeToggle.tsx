@@ -26,7 +26,7 @@ export function ClaudeToggle() {
       <span className="text-sm text-white/80">
         🤖 Claude AI
         {claudeEnabled && (
-          <span className="ml-1 text-xs text-purple-400">(sonnet-4)</span>
+          <span className="ml-1 text-xs text-purple-400">(haiku-4.5)</span>
         )}
       </span>
     </label>
