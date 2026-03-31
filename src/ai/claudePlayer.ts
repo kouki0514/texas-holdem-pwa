@@ -10,8 +10,8 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { ActionType, Card, GameState, Player, PlayerAction } from '@/game/types'
-import { evaluateHand } from '@/game/handEvaluator'
-import { rankToValue } from '@/game/deck'
+import { evaluateHand, compareHandResults } from '@/game/handEvaluator'
+import { rankToValue, createDeck } from '@/game/deck'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -225,6 +225,161 @@ function classifyMadeHand(holeCards: [Card, Card], communityCards: Card[]): stri
   return `トラッシュハンド — Tier5-Trash (fold to any bet; bluff only with fold equity reads)`
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Monte Carlo equity estimator
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Estimate win equity via Monte Carlo simulation.
+ * Randomly completes unknown community cards and opponent hole cards,
+ * then evaluates who wins. Returns win rate [0, 1].
+ */
+function estimateEquity(
+  holeCards: [Card, Card],
+  communityCards: Card[],
+  numOpponents: number,
+  iterations = 500,
+): number {
+  if (numOpponents <= 0) return 1
+
+  // Build the set of known cards to exclude from the deck
+  const knownKeys = new Set<string>([
+    ...holeCards.map((c) => `${c.rank}${c.suit}`),
+    ...communityCards.map((c) => `${c.rank}${c.suit}`),
+  ])
+
+  const fullDeck = createDeck().filter((c) => !knownKeys.has(`${c.rank}${c.suit}`))
+  const boardNeeded = 5 - communityCards.length // 0 on river
+
+  let wins = 0
+  let validTrials = 0
+
+  for (let i = 0; i < iterations; i++) {
+    // Fisher-Yates partial shuffle — only shuffle as many cards as we need
+    const cardsNeeded = boardNeeded + numOpponents * 2
+    const deck = [...fullDeck]
+    for (let j = 0; j < cardsNeeded && j < deck.length; j++) {
+      const r = j + Math.floor(Math.random() * (deck.length - j))
+      ;[deck[j], deck[r]] = [deck[r], deck[j]]
+    }
+    if (deck.length < cardsNeeded) continue
+
+    // Complete community cards
+    const board: Card[] = [
+      ...communityCards,
+      ...deck.slice(0, boardNeeded),
+    ]
+
+    // Deal opponent hole cards
+    let heroWins = true
+    let heroResult: ReturnType<typeof evaluateHand> | null = null
+    try {
+      heroResult = evaluateHand(holeCards, board)
+    } catch {
+      continue
+    }
+
+    for (let opp = 0; opp < numOpponents; opp++) {
+      const oppHole: [Card, Card] = [
+        deck[boardNeeded + opp * 2],
+        deck[boardNeeded + opp * 2 + 1],
+      ]
+      try {
+        const oppResult = evaluateHand(oppHole, board)
+        if (compareHandResults(oppResult, heroResult!) > 0) {
+          heroWins = false
+          break
+        }
+      } catch {
+        heroWins = false
+        break
+      }
+    }
+
+    if (heroWins) wins++
+    validTrials++
+  }
+
+  return validTrials > 0 ? wins / validTrials : 0.5
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Board texture analysis
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface BoardTexture {
+  suitedness: 'monotone' | 'two-tone' | 'rainbow'
+  paired: boolean
+  connected: boolean  // max rank gap between any two cards ≤ 3
+  summary: string
+}
+
+function analyzeBoardTexture(community: Card[]): BoardTexture | null {
+  if (community.length < 3) return null
+
+  const suitCounts: Record<string, number> = {}
+  for (const c of community) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1
+  const maxSuit = Math.max(...Object.values(suitCounts))
+  const suitedness: BoardTexture['suitedness'] =
+    maxSuit >= community.length ? 'monotone'
+    : maxSuit >= 2 ? 'two-tone'
+    : 'rainbow'
+
+  const rankVals = community.map((c) => rankToValue(c.rank)).sort((a, b) => a - b)
+  const rankSet = new Set(rankVals)
+  const paired = rankVals.length !== rankSet.size
+
+  const span = rankVals[rankVals.length - 1] - rankVals[0]
+  const connected = span <= 3
+
+  const parts: string[] = [suitedness]
+  if (paired) parts.push('paired')
+  if (connected) parts.push('connected')
+  const summary = parts.join(' / ')
+
+  return { suitedness, paired, connected, summary }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Bet sizing guide based on board texture + hand tier
+// ──────────────────────────────────────────────────────────────────────────────
+
+function betSizingGuide(texture: BoardTexture | null, totalPot: number): string {
+  const small  = Math.round(totalPot * 0.33)
+  const medium = Math.round(totalPot * 0.5)
+  const large  = Math.round(totalPot * 0.67)
+  const overbet = totalPot
+
+  const sizes = `SMALL=${small}(1/3pot) MEDIUM=${medium}(1/2pot) LARGE=${large}(2/3pot) OVERBET=${overbet}(1xpot)`
+
+  if (!texture) {
+    return `${sizes}\nPreflop: use SMALL for steals, MEDIUM for value raises, LARGE for 3-bets.`
+  }
+
+  const lines: string[] = [sizes]
+
+  if (texture.suitedness === 'monotone') {
+    lines.push('Monotone board: LARGE or OVERBET with nuts/strong flush; OVERBET as polarised bluff.')
+  } else if (texture.suitedness === 'two-tone') {
+    lines.push('Two-tone board: MEDIUM to LARGE with strong value; MEDIUM semi-bluff with flush draws.')
+  } else {
+    lines.push('Rainbow board: SMALL on dry boards for thin value; MEDIUM for standard value/protection.')
+  }
+
+  if (texture.connected) {
+    lines.push('Connected board: LARGE with straights/sets to charge draws; SMALL as blocking bet.')
+  }
+  if (texture.paired) {
+    lines.push('Paired board: SMALL/MEDIUM with trips+; polarised OVERBET with full house on dry paired board.')
+  }
+
+  return lines.join('\n')
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// System prompt builder
+// ──────────────────────────────────────────────────────────────────────────────
+
 function buildSystemPrompt(state: GameState, player: Player): string {
   const holeCards = player.holeCards as [Card, Card]
   const toCall = Math.max(0, state.currentBet - player.currentBet)
@@ -232,6 +387,14 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   const totalPot = state.pots.reduce((s, p) => s + p.amount, 0)
   const position = getPositionLabel(state.players, player, state.dealerIndex)
   const minRaiseTotal = state.currentBet + state.minRaise
+
+  const activeOpponents = state.players.filter((p) => p.id !== player.id && !p.isFolded)
+  const numOpponents = activeOpponents.length
+  const isMultiway = numOpponents >= 2
+
+  // ── Monte Carlo equity ───────────────────────────────────────────────────────
+  const equity = estimateEquity(holeCards, state.communityCards, numOpponents, 500)
+  const equityPct = `${(equity * 100).toFixed(1)}%`
 
   // ── Pot odds & required equity ──────────────────────────────────────────────
   const potOdds = toCall > 0 ? toCall / (totalPot + toCall) : 0
@@ -242,7 +405,7 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   // ── SPR (Stack-to-Pot Ratio) ─────────────────────────────────────────────────
   const effectiveStack = Math.min(
     player.chips,
-    ...state.players.filter((p) => p.id !== player.id && !p.isFolded).map((p) => p.chips),
+    ...activeOpponents.map((p) => p.chips),
   )
   const spr = totalPot > 0 ? (effectiveStack / totalPot) : 999
   let sprNote: string
@@ -276,15 +439,22 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   }
 
   // ── Bluff frequency guidance ─────────────────────────────────────────────────
-  // GTO bluff:value ratio based on bet size — bluffs / (bluffs + value) = pot_odds
-  const bluffRatio = toCall > 0
-    ? `To keep opponent indifferent: bluff ${(potOdds * 100).toFixed(0)}% of your betting range (matching their pot odds)`
-    : 'Set your own bet size — 1/3 pot needs 25% bluffs, 1/2 pot needs 33%, 2/3 pot needs 40%'
+  const bluffBase = toCall > 0
+    ? `To keep opponent indifferent: bluff ${(potOdds * 100).toFixed(0)}% of your betting range`
+    : '1/3 pot needs 25% bluffs, 1/2 pot needs 33%, 2/3 pot needs 40%'
+  const bluffRatio = isMultiway
+    ? `${bluffBase}. MULTIWAY POT (${numOpponents} opponents): significantly reduce bluff frequency — each opponent independently calls, so bluffs lose EV rapidly.`
+    : bluffBase
 
   // ── Hole card strength ───────────────────────────────────────────────────────
   const handStrength = state.communityCards.length > 0
     ? classifyMadeHand(holeCards, state.communityCards)
     : classifyHoleCards(holeCards)
+
+  // ── Board texture ────────────────────────────────────────────────────────────
+  const texture = analyzeBoardTexture(state.communityCards)
+  const textureStr = texture ? texture.summary : 'N/A (preflop)'
+  const sizingGuide = betSizingGuide(texture, totalPot)
 
   // ── Valid actions list ───────────────────────────────────────────────────────
   const validActions: string[] = ['fold']
@@ -300,21 +470,22 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   }
   validActions.push(`all-in (push ${player.chips} chips)`)
 
-  // ── Active opponents ─────────────────────────────────────────────────────────
-  const opponents = state.players
-    .filter((p) => p.id !== player.id && !p.isFolded)
+  // ── Active opponents (with VPIP/PFR if available) ───────────────────────────
+  const opponents = activeOpponents
     .map((p) => {
-      const flags = [
+      const parts: string[] = [
         p.isAllIn ? 'all-in' : `${p.chips} chips`,
-        p.currentBet > 0 ? `bet ${p.currentBet}` : '',
       ]
-        .filter(Boolean)
-        .join(', ')
-      return `  ${p.name}: ${flags}`
+      if (p.currentBet > 0) parts.push(`bet ${p.currentBet}`)
+      // VPIP/PFR — these fields may not exist on all player objects
+      const anyP = p as Record<string, unknown>
+      if (typeof anyP['vpip'] === 'number') parts.push(`VPIP ${(anyP['vpip'] as number * 100).toFixed(0)}%`)
+      if (typeof anyP['pfr']  === 'number') parts.push(`PFR ${(anyP['pfr']  as number * 100).toFixed(0)}%`)
+      return `  ${p.name}: ${parts.filter(Boolean).join(', ')}`
     })
     .join('\n')
 
-  return `You are a GTO-trained Texas Hold'em expert named "${player.name}". Make decisions using pot odds, SPR, position, hand strength, and balanced bluff/value ratios. Always reason step-by-step before deciding.
+  return `You are a GTO-trained Texas Hold'em expert named "${player.name}". Make decisions using equity, pot odds, SPR, board texture, position, and balanced bluff/value ratios. Always reason step-by-step before deciding.
 
 ## Situation
 - Phase           : ${state.phase}
@@ -322,14 +493,20 @@ function buildSystemPrompt(state: GameState, player: Player): string {
 - Hole cards      : ${formatCards(holeCards)}
 - Hand strength   : ${handStrength}
 - Community cards : ${formatCards(state.communityCards)}
+- Board texture   : ${textureStr}
 - Stack           : ${player.chips} chips  |  Current bet this street: ${player.currentBet}
 - Pot             : ${totalPot} chips  |  To call: ${toCall}  |  Big blind: ${state.bigBlind}
 - Min raise to    : ${minRaiseTotal} chips
+- Opponents active: ${numOpponents}${isMultiway ? ' (MULTIWAY — tighten ranges, reduce bluffs)' : ''}
 
 ## Quantitative Metrics
-- Pot odds (if calling)  : ${potOddsStr}
-- SPR                    : ${sprNote}
-- Opponent bet vs pot    : ${betSizeNote}
+- Equity (Monte Carlo ${500} trials): ${equityPct}
+- Pot odds (if calling)             : ${potOddsStr}
+- SPR                               : ${sprNote}
+- Opponent bet vs pot               : ${betSizeNote}
+
+## Bet Sizing Guide
+${sizingGuide}
 
 ## Strategic Context
 - Position strategy : ${posStrategy}
@@ -342,11 +519,12 @@ ${opponents || '  (none remaining)'}
 ${formatActionHistory(state.actionHistory, state.players)}
 
 ## Decision Framework
-1. Check hand tier vs pot odds — if equity < pot odds and no draw, fold.
+1. Compare equity (${equityPct}) vs pot odds (${potOddsStr}) — if equity < pot odds and no strong draw, fold.
 2. Apply SPR: low SPR → commit or fold; high SPR → implied odds matter.
-3. In position (BTN/CO): apply pressure with wide range; out of position (SB/BB): prefer check-raise over donk-bet.
+3. In position (BTN/CO): apply pressure; out of position (SB/BB): prefer check-raise over donk-bet.
 4. Large opponent bets (>2/3 pot) = polarised → re-raise or fold, rarely call.
-5. Maintain bluff/value balance: bluff combos ≈ pot-odds% of your total betting range.
+5. Use bet sizing guide above — choose SMALL/MEDIUM/LARGE/OVERBET and state the exact chip amount.
+6. Multiway: avoid bluffing unless you have strong fold equity. Bet for value or check.
 
 ## Your Valid Actions
 ${validActions.map((a) => `  • ${a}`).join('\n')}
@@ -355,8 +533,8 @@ ${validActions.map((a) => `  • ${a}`).join('\n')}
 Respond with ONLY a JSON object — no markdown, no extra text:
 {
   "action": "fold" | "check" | "call" | "raise" | "all-in",
-  "amount": <integer, REQUIRED when action is "raise" — total bet size this street>,
-  "reasoning": "<2-3 sentences: state pot odds/SPR/hand tier used, then explain decision in Japanese>"
+  "amount": <integer, REQUIRED when action is "raise" — total bet size this street, use sizing guide above>,
+  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, sizing choice, then explain decision in Japanese>"
 }
 
 Constraints:
