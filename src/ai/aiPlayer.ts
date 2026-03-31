@@ -201,11 +201,22 @@ function requiredEquity(toCall: number, potSize: number): number {
 
 function getPosition(playerIndex: number, dealerIndex: number, n: number): string {
   const rel = (playerIndex - dealerIndex + n) % n
+  // 人数に応じてOPEN_RANGESのキーにマッピング
   if (n === 2) return rel === 0 ? 'BTN' : 'BB'
   if (n === 3) return (['BTN','SB','BB'] as string[])[rel] ?? 'BTN'
-  if (n === 4) return (['BTN','SB','BB','UTG'] as string[])[rel] ?? 'BTN'
-  if (n === 5) return (['BTN','SB','BB','UTG','HJ'] as string[])[rel] ?? 'BTN'
-  return (['BTN','SB','BB','UTG','HJ','CO'] as string[])[rel % 6] ?? 'BTN'
+  // 4人: UTG→CO扱い（EP/MPなし）
+  if (n === 4) {
+    const p4 = ['BTN','SB','BB','CO'] as string[]
+    return p4[rel] ?? 'BTN'
+  }
+  // 5人: UTG→HJ、HJ→CO扱い
+  if (n === 5) {
+    const p5 = ['BTN','SB','BB','CO','HJ'] as string[]
+    return p5[rel] ?? 'BTN'
+  }
+  // 6人: 標準6max
+  const p6 = ['BTN','SB','BB','UTG','HJ','CO'] as string[]
+  return p6[rel % 6] ?? 'BTN'
 }
 
 function handToKey(player: Player): string | null {
@@ -244,13 +255,28 @@ function get3betRange(myPos: string, raiserPos: string): Record<string, string> 
   return THREBET_RANGES['DEFAULT']!
 }
 
-function getOpenRaiseSize(myPos: string, bbSize: number, stackDepth: number): number {
+
+// リンパー数を検出（コールのみのアクション）
+function countLimpers(state: GameState): number {
+  return state.actionHistory.filter(
+    a => a.action === 'call' && a.amount != null && a.amount <= state.bigBlind
+  ).length
+}
+
+// リンパーが居るかどうか
+function hasLimper(state: GameState): boolean {
+  return countLimpers(state) > 0
+}
+
+function getOpenRaiseSize(myPos: string, bbSize: number, stackDepth: number, limperCount: number = 0): number {
   const spFactor = stackDepth < 20 ? 0.8 : 1.0
   const sizes: Record<string, number> = {
     'UTG': 2.5, 'HJ': 2.5, 'CO': 2.5, 'BTN': 2.2, 'SB': 3.0, 'BB': 3.0,
   }
-  const mult = (sizes[myPos] ?? 2.5) * spFactor
-  return Math.round(bbSize * mult)
+  const baseMult = (sizes[myPos] ?? 2.5) * spFactor
+  // ISOレイズ: 通常サイズ + リンパー数×1BB
+  const isoBonus = limperCount * bbSize
+  return Math.round(bbSize * baseMult + isoBonus)
 }
 
 function get3betSize(myPos: string, raiseAmount: number, potSize: number, bbSize: number): number {
@@ -292,17 +318,24 @@ function preflopAction(
   const stackDepth = player.chips / bbSize
   const raiserPos = getRaiserPosition(state)
 
+  const limperCount = countLimpers(state)
+  const isLimpedPot = hasLimper(state) && raiseCount === 0
+
   if (raiseCount === 0) {
     const rangeMap = OPEN_RANGES[myPos] ?? {}
     const signal = rangeMap[key] ?? 'F'
     const resolved = applyDifficulty(signal, difficulty)
     if (resolved === 'R') {
-      const raiseAmount = getOpenRaiseSize(myPos, bbSize, stackDepth)
+      // リンパーがいる場合はISOサイズ（+1BB×リンパー数）
+      const raiseAmount = getOpenRaiseSize(myPos, bbSize, stackDepth, limperCount)
       const totalBet = state.currentBet + raiseAmount
       if (player.chips >= totalBet - player.currentBet) return { action: 'raise', amount: totalBet }
       return { action: 'all-in' }
     }
+    // リンパーポットでBBはチェック可能
     if (canCheck) return { action: 'check' }
+    // リンパーポットでコール可能（コールレンジ: レンジ内またはBBディフェンス）
+    if (isLimpedPot && myPos === 'BB' && toCall === 0) return { action: 'check' }
     if (myPos !== 'BB') return { action: 'fold' }
     return { action: 'check' }
   }
@@ -323,7 +356,12 @@ function preflopAction(
       if (player.chips >= betSize - player.currentBet) return { action: 'raise', amount: betSize }
       return { action: 'all-in' }
     }
-    if (resolved === 'C' || canCallFromRange) {
+    // ポットオッズ連動: openサイズが大きいほどコールレンジを絞る
+    // 標準2.5BB openに対してコールレンジ係数1.0、5BB openなら0.6に絞る
+    const openSizeInBB = state.currentBet / bbSize
+    const callRangeFactor = Math.max(0.4, 1.0 - (openSizeInBB - 2.5) * 0.15)
+    const shouldCall = (resolved === 'C' || canCallFromRange) && Math.random() < callRangeFactor
+    if (shouldCall) {
       if (player.chips >= toCall) return { action: 'call' }
       return { action: 'all-in' }
     }
