@@ -1,5 +1,5 @@
 import { useGameStore, type ReasoningEntry } from '@/store/gameStore'
-import type { Card } from '@/game/types'
+import type { Card, PlayerAction } from '@/game/types'
 import { evaluateHand } from '@/game/handEvaluator'
 
 const ACTION_STYLE: { [key: string]: string } = {
@@ -106,22 +106,18 @@ function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; communit
   const badge     = ACTION_STYLE[last.action] ?? ACTION_STYLE.check
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 last:border-0">
-      {/* 名前 */}
       <span className="text-xs text-white/80 font-semibold w-10 shrink-0 truncate">{last.playerName}</span>
-      {/* ホールカード 2枚 固定幅で確保 */}
       <div className="flex gap-1 shrink-0">
         {holeCards.length > 0
           ? holeCards.map((c, i) => <CardChip key={i} card={c} size="md" />)
           : <span className="text-xs text-white/20 w-[4.5rem]">—</span>
         }
       </div>
-      {/* 役名 */}
       {holeCards.length > 0 && community.length >= 3 && (
         <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 whitespace-nowrap">
           {handJp}
         </span>
       )}
-      {/* 最終アクション */}
       <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase shrink-0 ${badge}`}>
         {last.action}
       </span>
@@ -129,8 +125,24 @@ function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; communit
   )
 }
 
-// アクション詳細カード
-function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
+// ──────────────────────────────────────────────────────────────────────────────
+// Timeline item types
+// ──────────────────────────────────────────────────────────────────────────────
+
+type AiTimelineItem = { kind: 'ai'; entry: ReasoningEntry }
+type HumanTimelineItem = {
+  kind: 'human'
+  playerName: string
+  action: PlayerAction['action']
+  amount?: number
+  holeCards: Card[]
+  phase: string
+  timestamp: number
+}
+type TimelineItem = AiTimelineItem | HumanTimelineItem
+
+// AIアクション詳細カード
+function AiActionCard({ entry }: { entry: ReasoningEntry }) {
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
   return (
@@ -150,6 +162,11 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
             {entry.position}
           </span>
         )}
+        {entry.holeCards.length > 0 && (
+          <div className="flex gap-1 ml-1">
+            {entry.holeCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}
+          </div>
+        )}
       </div>
       {entry.reasoning && (
         <p className="text-xs text-white/70 leading-relaxed">{entry.reasoning}</p>
@@ -158,45 +175,97 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
   )
 }
 
+// 人間プレイヤーアクションカード
+function HumanActionCard({ item }: { item: HumanTimelineItem }) {
+  const badgeStyle = ACTION_STYLE[item.action] ?? ACTION_STYLE.check
+  const amtLabel   = item.amount != null ? ` ${item.amount}` : ''
+  return (
+    <div className="rounded-lg border border-green-700/30 bg-green-900/10 p-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-semibold text-green-300">{item.playerName}</span>
+        <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
+          {item.action}{amtLabel}
+        </span>
+        {item.phase && (
+          <span className="text-[10px] text-cyan-400/80 bg-cyan-900/20 border border-cyan-700/30 rounded px-1.5 py-0.5 font-mono uppercase">
+            {item.phase}
+          </span>
+        )}
+        {item.holeCards.length > 0 && (
+          <div className="flex gap-1 ml-1">
+            {item.holeCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // ハンドまとめ
-function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
-  // 全エントリの中で最大枚数のcommunityCardsを使う（プリフロップ時は空のため）
-  const community = entries.reduce<import('@/game/types').Card[]>(
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface HandSummaryProps {
+  handNumber: number
+  aiEntries: ReasoningEntry[]
+  humanActions: HumanTimelineItem[]
+}
+
+function HandSummary({ handNumber, aiEntries, humanActions }: HandSummaryProps) {
+  // 全エントリの中で最大枚数のcommunityCardsを使う
+  const community = aiEntries.reduce<Card[]>(
     (best, e) => (e.communityCards ?? []).length > best.length ? (e.communityCards ?? []) : best,
     []
   )
 
+  // プレイヤーごとのホールカード行用マップ（AIのみ：人間はtimeline内で表示）
   const playerMap = new Map<string, ReasoningEntry[]>()
-  for (const e of entries) {
+  for (const e of aiEntries) {
     if (!playerMap.has(e.playerId)) playerMap.set(e.playerId, [])
     playerMap.get(e.playerId)!.push(e)
   }
 
+  // タイムラインをtimestampでマージ・ソート
+  const timeline: TimelineItem[] = [
+    ...aiEntries.map((e): AiTimelineItem => ({ kind: 'ai', entry: e })),
+    ...humanActions.map((h): HumanTimelineItem => ({ ...h, kind: 'human' as const })),
+  ].sort((a, b) => {
+    const ta = a.kind === 'ai' ? a.entry.timestamp : a.timestamp
+    const tb = b.kind === 'ai' ? b.entry.timestamp : b.timestamp
+    return ta - tb
+  })
+
+  const totalActions = aiEntries.length + humanActions.length
+
   return (
     <div className="rounded-xl border border-white/15 bg-white/5 overflow-hidden">
-      {/* 1. ヘッダー */}
+      {/* ヘッダー */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/30 border-b border-white/10">
         <span className="text-xs font-bold text-purple-300 font-mono uppercase tracking-widest">
           Hand #{handNumber}
         </span>
-        <span className="text-xs text-white/40">{entries.length} アクション</span>
+        <span className="text-xs text-white/40">{totalActions} アクション</span>
       </div>
 
-      {/* 2. ボードカード（一番上） */}
+      {/* ボードカード */}
       <BoardCards community={community} />
 
-      {/* 3. プレイヤーホールカード */}
-      <div className="border-b border-white/10">
-        {[...playerMap.entries()].map(([playerId, pEntries]) => (
-          <PlayerRow key={playerId} entries={pEntries} community={community} />
-        ))}
-      </div>
+      {/* AIプレイヤーホールカード一覧 */}
+      {playerMap.size > 0 && (
+        <div className="border-b border-white/10">
+          {[...playerMap.entries()].map(([playerId, pEntries]) => (
+            <PlayerRow key={playerId} entries={pEntries} community={community} />
+          ))}
+        </div>
+      )}
 
-      {/* 4. アクション詳細 */}
+      {/* タイムライン */}
       <div className="px-3 py-2 space-y-1.5">
-        {entries.map((e) => (
-          <ReasoningCard key={`${e.playerId}-${e.timestamp}`} entry={e} />
-        ))}
+        {timeline.map((item, i) =>
+          item.kind === 'ai'
+            ? <AiActionCard key={`ai-${item.entry.playerId}-${item.entry.timestamp}`} entry={item.entry} />
+            : <HumanActionCard key={`human-${item.timestamp}-${i}`} item={item} />
+        )}
       </div>
     </div>
   )
@@ -220,7 +289,6 @@ function ThinkingIndicator({ playerName }: { playerName: string }) {
 
 interface Props {
   focusPlayerId?: string
-  maxEntries?: number
   className?: string
 }
 
@@ -230,21 +298,61 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
   const reasoningLog   = useGameStore((s) => s.reasoningLog)
   const players        = useGameStore((s) => s.players)
   const activeIdx      = useGameStore((s) => s.activePlayerIndex)
+  const actionHistory  = useGameStore((s) => s.actionHistory)
+  const handNumber     = useGameStore((s) => s.handNumber)
 
   if (!claudeEnabled) return null
 
   const thinkingPlayer = claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
 
-  const filtered = focusPlayerId
+  // 人間プレイヤーを特定
+  const humanPlayer = players.find((p) => p.isHuman)
+
+  // AIログをhandNumberでグループ化
+  const filteredAi = focusPlayerId
     ? reasoningLog.filter((e) => e.playerId === focusPlayerId)
     : reasoningLog
 
   const byHand = new Map<number, ReasoningEntry[]>()
-  for (const e of filtered) {
+  for (const e of filteredAi) {
     if (!byHand.has(e.handNumber)) byHand.set(e.handNumber, [])
     byHand.get(e.handNumber)!.push(e)
   }
-  const sortedHands = [...byHand.entries()].sort((a, b) => b[0] - a[0])
+
+  // 人間のアクションを現在のhandNumberに紐付ける
+  // actionHistoryは現在のハンドのみ保持されるため handNumber をキーにする
+  const humanTimelineItems: HumanTimelineItem[] = humanPlayer
+    ? actionHistory
+        .filter((a) => a.playerId === humanPlayer.id)
+        .map((a) => {
+          // phaseをtimestampが近いAIエントリから補完（なければ空文字）
+          const nearestAi = filteredAi
+            .filter((e) => e.handNumber === handNumber)
+            .reduce<ReasoningEntry | null>((best, e) => {
+              if (!best) return e
+              return Math.abs(e.timestamp - a.timestamp) < Math.abs(best.timestamp - a.timestamp) ? e : best
+            }, null)
+          return {
+            kind: 'human' as const,
+            playerName: humanPlayer.name,
+            action: a.action,
+            amount: a.amount,
+            holeCards: [...humanPlayer.holeCards],
+            phase: nearestAi?.phase ?? '',
+            timestamp: a.timestamp,
+          }
+        })
+    : []
+
+  // 現在のhandNumberのhandにhuman actionsを追加
+  const humanByHand = new Map<number, HumanTimelineItem[]>()
+  if (humanTimelineItems.length > 0) {
+    humanByHand.set(handNumber, humanTimelineItems)
+  }
+
+  // 全handNumberを収集してソート
+  const allHandNumbers = new Set([...byHand.keys(), ...humanByHand.keys()])
+  const sortedHands = [...allHandNumbers].sort((a, b) => b - a)
 
   if (!claudeThinking && sortedHands.length === 0) return null
 
@@ -253,8 +361,13 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
       {claudeThinking && thinkingPlayer && (
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
-      {sortedHands.map(([handNumber, entries]) => (
-        <HandSummary key={handNumber} handNumber={handNumber} entries={entries} />
+      {sortedHands.map((hn) => (
+        <HandSummary
+          key={hn}
+          handNumber={hn}
+          aiEntries={byHand.get(hn) ?? []}
+          humanActions={humanByHand.get(hn) ?? []}
+        />
       ))}
     </div>
   )
