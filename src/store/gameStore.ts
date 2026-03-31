@@ -21,6 +21,10 @@ import type { Card } from '@/game/types'
 // ──────────────────────────────────────────────────────────────────────────────
 
 export interface ReasoningEntry {
+  communityCards: import('@/game/types').Card[]
+  holeCards: import('@/game/types').Card[]
+  communityCards: import('@/game/types').Card[]
+  holeCards: import('@/game/types').Card[]
   playerId: string
   playerName: string
   action: ActionType
