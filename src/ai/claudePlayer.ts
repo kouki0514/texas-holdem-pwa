@@ -354,15 +354,21 @@ export async function claudeDecideAction(
 
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 512,
-    system: systemPrompt,
+    max_tokens: 256,
+    system: [
+      {
+        type: 'text',
+        text: systemPrompt,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
     messages: [
       {
         role: 'user',
-        content: 'あなたの番です。アクションを選んでください。',
+        content: 'アクションを選んでください。',
       },
     ],
-  })
+  } as Parameters<typeof client.messages.create>[0])
 
   // Extract text content
   const textBlock = response.content.find((b) => b.type === 'text')
