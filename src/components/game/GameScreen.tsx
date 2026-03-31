@@ -45,8 +45,8 @@ export function GameScreen() {
   return (
     <div className="flex flex-col w-screen h-screen bg-felt-dark overflow-hidden select-none">
 
-      {/* 1. Top bar */}
-      <header className="shrink-0 flex items-center justify-between
+      {/* 1. Top bar — z-40 so it stays above Showdown (z-30) */}
+      <header className="relative z-40 shrink-0 flex items-center justify-between
                          px-3 py-1.5 bg-black/40 border-b border-white/10">
         <span className="text-[11px] text-white/40 font-mono uppercase tracking-widest">
           {phase}
@@ -124,7 +124,7 @@ export function GameScreen() {
 
       {/* 履歴サイドパネル (fixed, 右側, メインに影響なし) */}
       {showReasoning && (
-        <div className="fixed top-12 right-0 bottom-0 w-[420px] bg-black/85 backdrop-blur-sm border-l border-white/10 flex flex-col z-40">
+        <div className="fixed top-12 right-0 bottom-0 w-[420px] bg-black/85 backdrop-blur-sm border-l border-white/10 flex flex-col z-35">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
             <span className="text-[11px] text-purple-300 font-mono uppercase tracking-widest">履歴</span>
             <button
@@ -147,6 +147,7 @@ export function GameScreen() {
           winners={winners}
           communityCards={communityCards}
           onNextHand={handleNextHand}
+          onClose={() => setShowResult(false)}
         />
       )}
 

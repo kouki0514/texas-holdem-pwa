@@ -8,6 +8,7 @@ interface Props {
   winners: PotResult[]
   communityCards: Card[]
   onNextHand: () => void
+  onClose: () => void
 }
 
 const HAND_RANK_JA: Record<HandRank, string> = {
@@ -25,7 +26,7 @@ const HAND_RANK_JA: Record<HandRank, string> = {
 
 function cardKey(c: Card) { return `${c.rank}-${c.suit}` }
 
-export function ShowdownResult({ players, winners, communityCards, onNextHand }: Props) {
+export function ShowdownResult({ players, winners, communityCards, onNextHand, onClose }: Props) {
   const winnerIds     = new Set(winners.flatMap((w) => w.winners))
   const activePlayers = players.filter((p) => !p.isFolded)
   const totalPot      = winners.reduce((s, w) => s + w.amount, 0)
@@ -56,11 +57,20 @@ export function ShowdownResult({ players, winners, communityCards, onNextHand }:
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto py-4">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto py-4">
       <div className="bg-felt-dark border border-white/20 rounded-2xl p-5 w-full max-w-xl shadow-2xl flex flex-col gap-4">
-        <h2 className="text-xl font-bold text-white text-center">
-          {isUncontested ? '相手がフォールド' : 'Showdown'}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">
+            {isUncontested ? '相手がフォールド' : 'Showdown'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white text-2xl leading-none transition-colors"
+            aria-label="閉じる"
+          >
+            ×
+          </button>
+        </div>
 
         {/* Winner announcement */}
         <div className="text-center">
