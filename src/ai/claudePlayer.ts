@@ -352,7 +352,8 @@ export async function claudeDecideAction(
   const client = getClient()
   const systemPrompt = buildSystemPrompt(state, player)
 
-  const response = await client.messages.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await (client.messages.create as any)({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
     system: [
@@ -368,7 +369,7 @@ export async function claudeDecideAction(
         content: 'アクションを選んでください。',
       },
     ],
-  } as Parameters<typeof client.messages.create>[0])
+  })
 
   // Extract text content
   const textBlock = response.content.find((b) => b.type === 'text')
