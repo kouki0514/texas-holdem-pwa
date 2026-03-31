@@ -2,10 +2,6 @@ import { useGameStore, type ReasoningEntry } from '@/store/gameStore'
 import type { Card } from '@/game/types'
 import { evaluateHand } from '@/game/handEvaluator'
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-
 const ACTION_STYLE: { [key: string]: string } = {
   fold:    'bg-red-900/60   text-red-300   border-red-700',
   check:   'bg-gray-700/60  text-gray-300  border-gray-500',
@@ -16,13 +12,12 @@ const ACTION_STYLE: { [key: string]: string } = {
 
 const SUIT_SYMBOL: { [key: string]: string } = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }
 const SUIT_COLOR:  { [key: string]: string } = {
-  spades: 'text-white', hearts: 'text-red-400', diamonds: 'text-red-400', clubs: 'text-white'
+  spades: 'text-gray-800', hearts: 'text-red-500', diamonds: 'text-red-500', clubs: 'text-gray-800'
 }
 const RANK_DISPLAY: { [key: string]: string } = {
   '2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
   '10':'10', T:'10', J:'J', Q:'Q', K:'K', A:'A'
 }
-
 const HAND_RANK_JP: { [key: string]: string } = {
   'royal-flush':     'ロイヤルフラッシュ',
   'straight-flush':  'ストレートフラッシュ',
@@ -38,23 +33,22 @@ const HAND_RANK_JP: { [key: string]: string } = {
 
 function rankDisplay(rank: string) { return RANK_DISPLAY[rank] ?? rank }
 
-// カード1枚をミニカード風に表示
 function CardChip({ card, size = 'sm' }: { card: Card; size?: 'sm' | 'md' }) {
-  const suit = card.suit as string
+  const suit   = card.suit as string
   const symbol = SUIT_SYMBOL[suit] ?? suit
-  const color  = SUIT_COLOR[suit]  ?? 'text-white'
+  const color  = SUIT_COLOR[suit]  ?? 'text-gray-800'
   const rank   = rankDisplay(card.rank as string)
   if (size === 'md') {
     return (
-      <span className={`inline-flex flex-col items-center justify-center bg-white rounded w-8 h-10 border border-white/30 shadow ${color} font-bold text-sm leading-none`}>
-        <span>{rank}</span>
-        <span className="text-base">{symbol}</span>
+      <span className={`inline-flex flex-col items-center justify-center bg-white rounded w-8 h-11 border border-gray-300 shadow-sm ${color} font-bold leading-none`}>
+        <span className="text-xs">{rank}</span>
+        <span className="text-sm">{symbol}</span>
       </span>
     )
   }
   return (
-    <span className={`inline-flex items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1 py-0.5 text-xs font-bold ${color}`}>
-      {rank}{symbol}
+    <span className={`inline-flex items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1 py-0.5 text-xs font-bold text-white`}>
+      <span>{rank}</span><span className={color}>{symbol}</span>
     </span>
   )
 }
@@ -69,19 +63,15 @@ function getHandJp(holeCards: Card[], communityCards: Card[]): string {
   }
 }
 
-// ─────────────────────────────────────────────
-// Board cards display (flop / turn / river)
-// ─────────────────────────────────────────────
-
+// ボードカード（Flop/Turn/River）
 function BoardCards({ community }: { community: Card[] }) {
   if (community.length === 0) return null
   const flop  = community.slice(0, 3)
   const turn  = community[3]
   const river = community[4]
-
   return (
-    <div className="px-3 py-2 border-b border-white/10 space-y-1.5">
-      <p className="text-[10px] text-white/40 uppercase tracking-widest">ボードカード</p>
+    <div className="px-3 py-2.5 bg-black/20 border-b border-white/10">
+      <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">ボードカード</p>
       <div className="flex gap-3 flex-wrap items-end">
         {flop.length > 0 && (
           <div className="flex flex-col items-center gap-1">
@@ -108,10 +98,38 @@ function BoardCards({ community }: { community: Card[] }) {
   )
 }
 
-// ─────────────────────────────────────────────
-// Single reasoning card
-// ─────────────────────────────────────────────
+// プレイヤーごとのホールカード行
+function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; community: Card[] }) {
+  const last      = entries[entries.length - 1]
+  const holeCards = last.holeCards ?? []
+  const handJp    = getHandJp(holeCards, community)
+  const badge     = ACTION_STYLE[last.action] ?? ACTION_STYLE.check
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 last:border-0">
+      {/* 名前 */}
+      <span className="text-xs text-white/80 font-semibold w-10 shrink-0 truncate">{last.playerName}</span>
+      {/* ホールカード 2枚 固定幅で確保 */}
+      <div className="flex gap-1 shrink-0">
+        {holeCards.length > 0
+          ? holeCards.map((c, i) => <CardChip key={i} card={c} size="md" />)
+          : <span className="text-xs text-white/20 w-[4.5rem]">—</span>
+        }
+      </div>
+      {/* 役名 */}
+      {holeCards.length > 0 && community.length >= 3 && (
+        <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 whitespace-nowrap">
+          {handJp}
+        </span>
+      )}
+      {/* 最終アクション */}
+      <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase shrink-0 ${badge}`}>
+        {last.action}
+      </span>
+    </div>
+  )
+}
 
+// アクション詳細カード
 function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
@@ -130,10 +148,7 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
   )
 }
 
-// ─────────────────────────────────────────────
-// Hand summary card (grouped by hand)
-// ─────────────────────────────────────────────
-
+// ハンドまとめ
 function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
   const first     = entries[0]
   const community = first?.communityCards ?? []
@@ -146,7 +161,7 @@ function HandSummary({ handNumber, entries }: { handNumber: number; entries: Rea
 
   return (
     <div className="rounded-xl border border-white/15 bg-white/5 overflow-hidden">
-      {/* Header */}
+      {/* 1. ヘッダー */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/30 border-b border-white/10">
         <span className="text-xs font-bold text-purple-300 font-mono uppercase tracking-widest">
           Hand #{handNumber}
@@ -154,39 +169,17 @@ function HandSummary({ handNumber, entries }: { handNumber: number; entries: Rea
         <span className="text-xs text-white/40">{entries.length} アクション</span>
       </div>
 
-      {/* Board cards */}
+      {/* 2. ボードカード（一番上） */}
       <BoardCards community={community} />
 
-      {/* Per-player hole cards + hand rank */}
+      {/* 3. プレイヤーホールカード */}
       <div className="border-b border-white/10">
-        {[...playerMap.entries()].map(([playerId, pEntries]) => {
-          const last      = pEntries[pEntries.length - 1]
-          const holeCards = last.holeCards ?? []
-          const handJp    = getHandJp(holeCards, community)
-          const badge     = ACTION_STYLE[last.action] ?? ACTION_STYLE.check
-          return (
-            <div key={playerId} className="flex items-center gap-2 px-3 py-2 border-b border-white/5 last:border-0">
-              <span className="text-xs text-white/80 font-semibold w-12 shrink-0 truncate">{last.playerName}</span>
-              <div className="flex gap-1 items-center">
-                {holeCards.length > 0
-                  ? holeCards.map((c, i) => <CardChip key={i} card={c} size="md" />)
-                  : <span className="text-xs text-white/20">—</span>
-                }
-              </div>
-              {holeCards.length > 0 && community.length >= 3 && (
-                <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 ml-1 whitespace-nowrap">
-                  {handJp}
-                </span>
-              )}
-              <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase shrink-0 ${badge}`}>
-                {last.action}
-              </span>
-            </div>
-          )
-        })}
+        {[...playerMap.entries()].map(([playerId, pEntries]) => (
+          <PlayerRow key={playerId} entries={pEntries} community={community} />
+        ))}
       </div>
 
-      {/* Action log */}
+      {/* 4. アクション詳細 */}
       <div className="px-3 py-2 space-y-1.5">
         {entries.map((e) => (
           <ReasoningCard key={`${e.playerId}-${e.timestamp}`} entry={e} />
@@ -195,10 +188,6 @@ function HandSummary({ handNumber, entries }: { handNumber: number; entries: Rea
     </div>
   )
 }
-
-// ─────────────────────────────────────────────
-// Thinking spinner
-// ─────────────────────────────────────────────
 
 function ThinkingIndicator({ playerName }: { playerName: string }) {
   return (
@@ -215,10 +204,6 @@ function ThinkingIndicator({ playerName }: { playerName: string }) {
     </div>
   )
 }
-
-// ─────────────────────────────────────────────
-// Main panel
-// ─────────────────────────────────────────────
 
 interface Props {
   focusPlayerId?: string
