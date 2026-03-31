@@ -165,8 +165,64 @@ function classifyMadeHand(holeCards: [Card, Card], communityCards: Card[]): stri
     return `ワンペア(ミドル/ボトムペア) — Tier4 Marginal (check/call small bets, fold to heavy pressure)`
   }
 
-  // Tier 5: High card
-  return `ハイカード — Tier5 Weak (bluff only with good equity/draw; fold to aggression)`
+  // Tier 5: High card — sub-classify by draw potential
+  const allCards = [...holeCards, ...communityCards]
+  const allVals = allCards.map((c) => rankToValue(c.rank))
+
+  // Flush draw: 4 cards of same suit (including hole cards)
+  const suitCounts: Record<string, number> = {}
+  for (const c of allCards) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1
+  const hasFlushDraw = Object.values(suitCounts).some((n) => n === 4)
+
+  // Straight draw detection — build sorted unique rank values
+  const uniqueVals = [...new Set(allVals)].sort((a, b) => a - b)
+  // Also include Ace as 1 for wheel draws
+  const valsWithLowAce = uniqueVals.includes(14)
+    ? [1, ...uniqueVals]
+    : uniqueVals
+
+  function countInWindow(vals: number[], low: number): number {
+    return vals.filter((v) => v >= low && v <= low + 4).length
+  }
+
+  let hasOESD = false
+  let hasGutshot = false
+  for (const base of valsWithLowAce) {
+    const inWindow = countInWindow(valsWithLowAce, base)
+    if (inWindow === 4) {
+      // Check if it's open-ended (both ends open) vs gutshot
+      // OESD: 4 consecutive ranks; gutshot: gap of exactly 1 in a 5-rank window
+      const windowVals = valsWithLowAce.filter((v) => v >= base && v <= base + 4)
+      const isConsecutive4 = windowVals.length === 4 &&
+        windowVals[windowVals.length - 1] - windowVals[0] === 3
+      if (isConsecutive4) {
+        hasOESD = true
+      } else {
+        hasGutshot = true
+      }
+    }
+  }
+
+  if (hasFlushDraw || hasOESD) {
+    const drawType = hasFlushDraw && hasOESD
+      ? 'フラッシュドロー+OESD (コンボドロー)'
+      : hasFlushDraw
+        ? 'フラッシュドロー(4枚同スート)'
+        : 'OESD(両面ストレートドロー)'
+    return `${drawType} — Tier5-Draw (semi-bluff raise or call with implied odds; ~35-40% equity if one draw)`
+  }
+
+  if (hasGutshot) {
+    return `ガットショット — Tier5-Gutshot (call only with good pot odds ~20%+; bluff rarely)`
+  }
+
+  const boardHighValue = Math.max(...communityCards.map((c) => rankToValue(c.rank)))
+  const hasOvercard = holeCards.some((c) => rankToValue(c.rank) > boardHighValue)
+  if (hasOvercard) {
+    return `オーバーカード — Tier5-Overcard (check/fold unless cheap; runner-runner draw potential only)`
+  }
+
+  return `トラッシュハンド — Tier5-Trash (fold to any bet; bluff only with fold equity reads)`
 }
 
 function buildSystemPrompt(state: GameState, player: Player): string {
