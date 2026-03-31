@@ -288,6 +288,7 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
   const activeIdx         = useGameStore((s) => s.activePlayerIndex)
   const handNumber        = useGameStore((s) => s.handNumber)
   const chipsAtHandStart  = useGameStore((s) => s._chipsAtHandStart)
+  const handNetChipsMap   = useGameStore((s) => s.handNetChipsMap)
 
   const thinkingPlayer = claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
   const humanPlayer    = players.find((p) => p.isHuman)
@@ -311,9 +312,11 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
       {sortedHands.map(([hn, entries], i) => {
-        // 現在のハンドはchipsAtHandStartから計算、過去ハンドはundefined
+        // 過去ハンドは handNetChipsMap から、現在進行中のハンドは chipsAtHandStart から計算
         let netChips: number | undefined
-        if (hn === handNumber && humanPlayer != null && chipsAtHandStart > 0) {
+        if (hn in handNetChipsMap) {
+          netChips = handNetChipsMap[hn]
+        } else if (hn === handNumber && humanPlayer != null && chipsAtHandStart > 0) {
           netChips = humanPlayer.chips - chipsAtHandStart
         }
         return (

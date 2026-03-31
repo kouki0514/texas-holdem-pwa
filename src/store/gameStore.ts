@@ -70,6 +70,8 @@ interface GameStore extends GameState {
   _chipsAtHandStart: number
   /** Whether the hand record has already been persisted this hand (prevent double-write) */
   _handPersisted: boolean
+  /** Net chip change per hand for the human player: handNumber → netChips */
+  handNetChipsMap: Record<number, number>
 
   initGame: (players: Player[]) => void
   startNewHand: () => void
@@ -101,6 +103,7 @@ export const useGameStore = create<GameStore>()(
     _pfrThisHand: false,
     _chipsAtHandStart: 0,
     _handPersisted: false,
+    handNetChipsMap: {},
 
     initGame(players) {
       const human = players.find((p) => p.isHuman)
@@ -115,6 +118,7 @@ export const useGameStore = create<GameStore>()(
           vpipHands: 0,
         }
         s._vpipThisHand = false
+        s.handNetChipsMap = {}
       })
     },
 
@@ -208,8 +212,15 @@ export const useGameStore = create<GameStore>()(
         const vpip = afterAction._vpipThisHand
         const pfr = afterAction._pfrThisHand
         const chipsAtHandStart = afterAction._chipsAtHandStart
+        const humanAfter = afterAction.players.find((p) => p.isHuman)
+        const netChips = humanAfter != null && chipsAtHandStart > 0
+          ? humanAfter.chips - chipsAtHandStart
+          : 0
         // Mark persisted synchronously before setTimeout fires to prevent duplicate writes
-        set((s) => { s._handPersisted = true })
+        set((s) => {
+          s._handPersisted = true
+          s.handNetChipsMap[afterAction.handNumber] = netChips
+        })
         setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
@@ -256,7 +267,14 @@ export const useGameStore = create<GameStore>()(
         const vpip = afterAdvance._vpipThisHand
         const pfr = afterAdvance._pfrThisHand
         const chipsAtHandStart = afterAdvance._chipsAtHandStart
-        set((s) => { s._handPersisted = true })
+        const humanAfter = afterAdvance.players.find((p) => p.isHuman)
+        const netChips = humanAfter != null && chipsAtHandStart > 0
+          ? humanAfter.chips - chipsAtHandStart
+          : 0
+        set((s) => {
+          s._handPersisted = true
+          s.handNetChipsMap[afterAdvance.handNumber] = netChips
+        })
         setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
