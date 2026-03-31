@@ -147,7 +147,7 @@ export function GameScreen() {
           winners={winners}
           communityCards={communityCards}
           onNextHand={handleNextHand}
-          onClose={() => setShowResult(false)}
+          onClose={handleNextHand}
         />
       )}
 
