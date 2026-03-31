@@ -46,7 +46,7 @@ function getHandJp(holeCards: Card[], communityCards: Card[]): string {
   if (holeCards.length < 2 || communityCards.length < 3) return '—'
   try {
     const result = evaluateHand(holeCards as [Card, Card], communityCards)
-    return HAND_RANK_JP[result.rank] ?? 'ハイカード'
+    return HAND_RANK_JP[result.rank as number] ?? 'ハイカード'
   } catch {
     return '—'
   }
