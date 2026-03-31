@@ -478,9 +478,9 @@ function buildSystemPrompt(state: GameState, player: Player): string {
       ]
       if (p.currentBet > 0) parts.push(`bet ${p.currentBet}`)
       // VPIP/PFR — these fields may not exist on all player objects
-      const anyP = p as Record<string, unknown>
-      if (typeof anyP['vpip'] === 'number') parts.push(`VPIP ${(anyP['vpip'] as number * 100).toFixed(0)}%`)
-      if (typeof anyP['pfr']  === 'number') parts.push(`PFR ${(anyP['pfr']  as number * 100).toFixed(0)}%`)
+      const anyP = p as unknown as Record<string, unknown>
+      if (typeof anyP['vpip'] === 'number') parts.push(`VPIP ${((anyP['vpip'] as number) * 100).toFixed(0)}%`)
+      if (typeof anyP['pfr']  === 'number') parts.push(`PFR ${((anyP['pfr']  as number) * 100).toFixed(0)}%`)
       return `  ${p.name}: ${parts.filter(Boolean).join(', ')}`
     })
     .join('\n')
