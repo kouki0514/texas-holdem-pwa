@@ -53,6 +53,7 @@ interface GameStore extends GameState {
   aiDifficulty: AiDifficulty
   /** Enable Claude API for all AI players */
   claudeEnabled: boolean
+  preflopClaude: boolean
   /** Whether a Claude API call is in-flight (disables human actions until resolved) */
   claudeThinking: boolean
   /** Latest reasoning entry per playerId */
@@ -77,6 +78,7 @@ interface GameStore extends GameState {
   advanceRunout: () => void
   setAiDifficulty: (difficulty: AiDifficulty) => void
   setClaudeEnabled: (enabled: boolean) => void
+  setPreflopClaude: (enabled: boolean) => void
   clearReasoning: () => void
   quitGame: () => void
 }
@@ -90,6 +92,7 @@ export const useGameStore = create<GameStore>()(
     ...createInitialState([]),
     aiDifficulty: 'medium',
     claudeEnabled: false,
+    preflopClaude: false,
     claudeThinking: false,
     latestReasoning: {},
     reasoningLog: [],
@@ -261,7 +264,9 @@ export const useGameStore = create<GameStore>()(
       const player = state.players[idx]
       if (!player || player.isHuman || player.isFolded || player.isAllIn) return
 
-      if (state.claudeEnabled) {
+      const isPreflop = state.phase === 'preflop'
+    const useClaudeNow = state.claudeEnabled && (!isPreflop || state.preflopClaude)
+    if (useClaudeNow) {
         // ── Claude path (async) ────────────────────────────────────────────
         set((s) => { s.claudeThinking = true })
 
@@ -312,6 +317,10 @@ export const useGameStore = create<GameStore>()(
 
     setClaudeEnabled(enabled) {
       set((s) => { s.claudeEnabled = enabled })
+    },
+
+    setPreflopClaude(enabled) {
+      set((s) => { s.preflopClaude = enabled })
     },
 
     clearReasoning() {
