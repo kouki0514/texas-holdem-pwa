@@ -6,7 +6,7 @@ import { evaluateHand } from '@/game/handEvaluator'
 // Helpers
 // ─────────────────────────────────────────────
 
-const ACTION_STYLE: Record<string, string> = {
+const ACTION_STYLE: { [key: string]: string } = {
   fold:   'bg-red-900/60   text-red-300   border-red-700',
   check:  'bg-gray-700/60  text-gray-300  border-gray-500',
   call:   'bg-blue-900/60  text-blue-300  border-blue-700',
@@ -14,11 +14,11 @@ const ACTION_STYLE: Record<string, string> = {
   'all-in':'bg-purple-900/60 text-purple-300 border-purple-700',
 }
 
-const SUIT_SYMBOL: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' }
-const SUIT_COLOR:  Record<string, string> = { s: 'text-white', h: 'text-red-400', d: 'text-red-400', c: 'text-white' }
-const RANK_LABEL: Record<string, string>  = { T: '10', J: 'J', Q: 'Q', K: 'K', A: 'A' }
+const SUIT_SYMBOL: { [key: string]: string } = { s: '♠', h: '♥', d: '♦', c: '♣' }
+const SUIT_COLOR:  { [key: string]: string } = { s: 'text-white', h: 'text-red-400', d: 'text-red-400', c: 'text-white' }
+const RANK_LABEL: { [key: string]: string } = { T: '10', J: 'J', Q: 'Q', K: 'K', A: 'A' }
 
-const HAND_RANK_JP: Record<number, string> = {
+const HAND_RANK_JP: { [key: number]: string } = {
   8: 'ロイヤルフラッシュ',
   7: 'ストレートフラッシュ',
   6: 'フォーカード',
