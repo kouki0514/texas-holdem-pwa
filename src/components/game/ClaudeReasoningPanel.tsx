@@ -7,37 +7,54 @@ import { evaluateHand } from '@/game/handEvaluator'
 // ─────────────────────────────────────────────
 
 const ACTION_STYLE: { [key: string]: string } = {
-  fold:   'bg-red-900/60   text-red-300   border-red-700',
-  check:  'bg-gray-700/60  text-gray-300  border-gray-500',
-  call:   'bg-blue-900/60  text-blue-300  border-blue-700',
-  raise:  'bg-yellow-900/60 text-yellow-300 border-yellow-700',
+  fold:    'bg-red-900/60   text-red-300   border-red-700',
+  check:   'bg-gray-700/60  text-gray-300  border-gray-500',
+  call:    'bg-blue-900/60  text-blue-300  border-blue-700',
+  raise:   'bg-yellow-900/60 text-yellow-300 border-yellow-700',
   'all-in':'bg-purple-900/60 text-purple-300 border-purple-700',
 }
 
-const SUIT_SYMBOL: { [key: string]: string } = { s: '♠', h: '♥', d: '♦', c: '♣' }
-const SUIT_COLOR:  { [key: string]: string } = { s: 'text-white', h: 'text-red-400', d: 'text-red-400', c: 'text-white' }
-const RANK_LABEL: { [key: string]: string } = { T: '10', J: 'J', Q: 'Q', K: 'K', A: 'A' }
-
-const HAND_RANK_JP: { [key: string]: string } = {
-  'royal-flush':    'ロイヤルフラッシュ',
-  'straight-flush': 'ストレートフラッシュ',
-  'four-of-a-kind': 'フォーカード',
-  'full-house':     'フルハウス',
-  'flush':          'フラッシュ',
-  'straight':       'ストレート',
-  'three-of-a-kind':'スリーカード',
-  'two-pair':       'ツーペア',
-  'one-pair':       'ワンペア',
-  'high-card':      'ハイカード',
+const SUIT_SYMBOL: { [key: string]: string } = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }
+const SUIT_COLOR:  { [key: string]: string } = {
+  spades: 'text-white', hearts: 'text-red-400', diamonds: 'text-red-400', clubs: 'text-white'
+}
+const RANK_DISPLAY: { [key: string]: string } = {
+  '2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+  '10':'10', T:'10', J:'J', Q:'Q', K:'K', A:'A'
 }
 
-function rankLabel(r: string) { return RANK_LABEL[r] ?? r }
+const HAND_RANK_JP: { [key: string]: string } = {
+  'royal-flush':     'ロイヤルフラッシュ',
+  'straight-flush':  'ストレートフラッシュ',
+  'four-of-a-kind':  'フォーカード',
+  'full-house':      'フルハウス',
+  'flush':           'フラッシュ',
+  'straight':        'ストレート',
+  'three-of-a-kind': 'スリーカード',
+  'two-pair':        'ツーペア',
+  'one-pair':        'ワンペア',
+  'high-card':       'ハイカード',
+}
 
-function CardChip({ card }: { card: Card }) {
+function rankDisplay(rank: string) { return RANK_DISPLAY[rank] ?? rank }
+
+// カード1枚をミニカード風に表示
+function CardChip({ card, size = 'sm' }: { card: Card; size?: 'sm' | 'md' }) {
   const suit = card.suit as string
+  const symbol = SUIT_SYMBOL[suit] ?? suit
+  const color  = SUIT_COLOR[suit]  ?? 'text-white'
+  const rank   = rankDisplay(card.rank as string)
+  if (size === 'md') {
+    return (
+      <span className={`inline-flex flex-col items-center justify-center bg-white rounded w-8 h-10 border border-white/30 shadow ${color} font-bold text-sm leading-none`}>
+        <span>{rank}</span>
+        <span className="text-base">{symbol}</span>
+      </span>
+    )
+  }
   return (
-    <span className={`inline-flex items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1 py-0.5 text-xs font-bold ${SUIT_COLOR[suit] ?? 'text-white'}`}>
-      {rankLabel(card.rank)}{SUIT_SYMBOL[suit] ?? suit}
+    <span className={`inline-flex items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1 py-0.5 text-xs font-bold ${color}`}>
+      {rank}{symbol}
     </span>
   )
 }
@@ -50,6 +67,45 @@ function getHandJp(holeCards: Card[], communityCards: Card[]): string {
   } catch {
     return '—'
   }
+}
+
+// ─────────────────────────────────────────────
+// Board cards display (flop / turn / river)
+// ─────────────────────────────────────────────
+
+function BoardCards({ community }: { community: Card[] }) {
+  if (community.length === 0) return null
+  const flop  = community.slice(0, 3)
+  const turn  = community[3]
+  const river = community[4]
+
+  return (
+    <div className="px-3 py-2 border-b border-white/10 space-y-1.5">
+      <p className="text-[10px] text-white/40 uppercase tracking-widest">ボードカード</p>
+      <div className="flex gap-3 flex-wrap items-end">
+        {flop.length > 0 && (
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[9px] text-white/30 uppercase tracking-widest">Flop</span>
+            <div className="flex gap-1">
+              {flop.map((c, i) => <CardChip key={i} card={c} size="md" />)}
+            </div>
+          </div>
+        )}
+        {turn && (
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[9px] text-white/30 uppercase tracking-widest">Turn</span>
+            <CardChip card={turn} size="md" />
+          </div>
+        )}
+        {river && (
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[9px] text-white/30 uppercase tracking-widest">River</span>
+            <CardChip card={river} size="md" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─────────────────────────────────────────────
@@ -75,17 +131,13 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
 }
 
 // ─────────────────────────────────────────────
-// Hand summary card (grouped)
+// Hand summary card (grouped by hand)
 // ─────────────────────────────────────────────
 
 function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
-  const first       = entries[0]
-  const community   = first?.communityCards ?? []
-  const flop        = community.slice(0, 3)
-  const turn        = community[3]
-  const river       = community[4]
+  const first     = entries[0]
+  const community = first?.communityCards ?? []
 
-  // collect unique players and their best hand at river
   const playerMap = new Map<string, ReasoningEntry[]>()
   for (const e of entries) {
     if (!playerMap.has(e.playerId)) playerMap.set(e.playerId, [])
@@ -102,60 +154,37 @@ function HandSummary({ handNumber, entries }: { handNumber: number; entries: Rea
         <span className="text-xs text-white/40">{entries.length} アクション</span>
       </div>
 
-      {/* Community cards */}
-      {community.length > 0 && (
-        <div className="px-3 py-2 border-b border-white/10 space-y-1.5">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest">ボードカード</p>
-          <div className="flex gap-2 flex-wrap items-center">
-            {flop.length > 0 && (
-              <div className="flex gap-1 items-center">
-                <span className="text-[10px] text-white/30 mr-0.5">F</span>
-                {flop.map((c, i) => <CardChip key={i} card={c} />)}
-              </div>
-            )}
-            {turn && (
-              <div className="flex gap-1 items-center">
-                <span className="text-[10px] text-white/30 mr-0.5">T</span>
-                <CardChip card={turn} />
-              </div>
-            )}
-            {river && (
-              <div className="flex gap-1 items-center">
-                <span className="text-[10px] text-white/30 mr-0.5">R</span>
-                <CardChip card={river} />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Board cards */}
+      <BoardCards community={community} />
 
       {/* Per-player hole cards + hand rank */}
-      {[...playerMap.entries()].map(([playerId, pEntries]) => {
-        const last       = pEntries[pEntries.length - 1]
-        const holeCards  = last.holeCards ?? []
-        const handJp     = getHandJp(holeCards, community)
-        const lastAction = last.action
-        const badge      = ACTION_STYLE[lastAction] ?? ACTION_STYLE.check
-        return (
-          <div key={playerId} className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5 last:border-0">
-            <span className="text-xs text-white/80 font-semibold w-16 shrink-0 truncate">{last.playerName}</span>
-            <div className="flex gap-1 items-center">
-              {holeCards.length > 0
-                ? holeCards.map((c, i) => <CardChip key={i} card={c} />)
-                : <span className="text-xs text-white/20">—</span>
-              }
-            </div>
-            {holeCards.length > 0 && community.length >= 3 && (
-              <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 ml-1 whitespace-nowrap">
-                {handJp}
+      <div className="border-b border-white/10">
+        {[...playerMap.entries()].map(([playerId, pEntries]) => {
+          const last      = pEntries[pEntries.length - 1]
+          const holeCards = last.holeCards ?? []
+          const handJp    = getHandJp(holeCards, community)
+          const badge     = ACTION_STYLE[last.action] ?? ACTION_STYLE.check
+          return (
+            <div key={playerId} className="flex items-center gap-2 px-3 py-2 border-b border-white/5 last:border-0">
+              <span className="text-xs text-white/80 font-semibold w-12 shrink-0 truncate">{last.playerName}</span>
+              <div className="flex gap-1 items-center">
+                {holeCards.length > 0
+                  ? holeCards.map((c, i) => <CardChip key={i} card={c} size="md" />)
+                  : <span className="text-xs text-white/20">—</span>
+                }
+              </div>
+              {holeCards.length > 0 && community.length >= 3 && (
+                <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 ml-1 whitespace-nowrap">
+                  {handJp}
+                </span>
+              )}
+              <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase shrink-0 ${badge}`}>
+                {last.action}
               </span>
-            )}
-            <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase ${badge}`}>
-              {lastAction}
-            </span>
-          </div>
-        )
-      })}
+            </div>
+          )
+        })}
+      </div>
 
       {/* Action log */}
       <div className="px-3 py-2 space-y-1.5">
@@ -176,11 +205,8 @@ function ThinkingIndicator({ playerName }: { playerName: string }) {
     <div className="rounded-xl border border-purple-500/30 bg-purple-900/20 p-3 flex items-center gap-3">
       <div className="flex gap-1 shrink-0">
         {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-bounce"
-            style={{ animationDelay: `${i * 0.15}s` }}
-          />
+          <span key={i} className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
       </div>
       <p className="text-sm text-purple-300">
@@ -200,10 +226,7 @@ interface Props {
   className?: string
 }
 
-export function ClaudeReasoningPanel({
-  focusPlayerId,
-  className = '',
-}: Props) {
+export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
   const claudeEnabled  = useGameStore((s) => s.claudeEnabled)
   const claudeThinking = useGameStore((s) => s.claudeThinking)
   const reasoningLog   = useGameStore((s) => s.reasoningLog)
@@ -212,15 +235,12 @@ export function ClaudeReasoningPanel({
 
   if (!claudeEnabled) return null
 
-  const thinkingPlayer =
-    claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
+  const thinkingPlayer = claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
 
-  // filter by player if focusPlayerId given
   const filtered = focusPlayerId
     ? reasoningLog.filter((e) => e.playerId === focusPlayerId)
     : reasoningLog
 
-  // group by handNumber (newest hand first)
   const byHand = new Map<number, ReasoningEntry[]>()
   for (const e of filtered) {
     if (!byHand.has(e.handNumber)) byHand.set(e.handNumber, [])
@@ -232,12 +252,9 @@ export function ClaudeReasoningPanel({
 
   return (
     <div className={`flex flex-col gap-3 p-3 ${className}`}>
-      {/* Thinking indicator */}
       {claudeThinking && thinkingPlayer && (
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
-
-      {/* Hand summaries */}
       {sortedHands.map(([handNumber, entries]) => (
         <HandSummary key={handNumber} handNumber={handNumber} entries={entries} />
       ))}
