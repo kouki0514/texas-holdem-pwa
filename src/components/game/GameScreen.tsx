@@ -56,7 +56,7 @@ export function GameScreen() {
         )}
         <div className="flex items-center gap-2">
           <ClaudeToggle />
-          {/* AI思考ボタン */}
+          {/* 履歴ボタン */}
           <button
             onClick={() => setShowReasoning((v) => !v)}
             className={`text-[11px] font-mono uppercase tracking-widest transition-colors px-2 py-0.5 rounded border ${
@@ -65,7 +65,7 @@ export function GameScreen() {
                 : 'text-white/40 border-white/20 hover:text-white'
             }`}
           >
-            AI思考
+            履歴
           </button>
           <button
             onClick={() => setShowStats(true)}
@@ -122,11 +122,11 @@ export function GameScreen() {
         <ActionBar />
       </section>
 
-      {/* AI思考サイドパネル (fixed, 右側, メインに影響なし) */}
+      {/* 履歴サイドパネル (fixed, 右側, メインに影響なし) */}
       {showReasoning && (
         <div className="fixed top-12 right-0 bottom-0 w-[420px] bg-black/85 backdrop-blur-sm border-l border-white/10 flex flex-col z-40">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
-            <span className="text-[11px] text-purple-300 font-mono uppercase tracking-widest">AI の思考</span>
+            <span className="text-[11px] text-purple-300 font-mono uppercase tracking-widest">履歴</span>
             <button
               onClick={() => setShowReasoning(false)}
               className="text-white/40 hover:text-white text-lg leading-none"

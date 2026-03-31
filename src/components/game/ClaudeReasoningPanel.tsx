@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useGameStore, type ReasoningEntry } from '@/store/gameStore'
 import type { Card } from '@/game/types'
 import { evaluateHand } from '@/game/handEvaluator'
@@ -101,48 +102,34 @@ function BoardCards({ community }: { community: Card[] }) {
   )
 }
 
-// プレイヤーごとのホールカード行（AIプレイヤーのみ）
-function PlayerRow({ entries, community }: { entries: ReasoningEntry[]; community: Card[] }) {
-  const last      = entries[entries.length - 1]
-  const holeCards = last.holeCards ?? []
-  const handJp    = getHandJp(holeCards, community)
-  const badge     = ACTION_STYLE[last.action] ?? ACTION_STYLE.check
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 last:border-0">
-      <span className="text-xs text-white/80 font-semibold w-10 shrink-0 truncate">{last.playerName}</span>
-      <div className="flex gap-1 shrink-0">
-        {holeCards.length > 0
-          ? holeCards.map((c, i) => <CardChip key={i} card={c} size="md" />)
-          : <span className="text-xs text-white/20 w-[4.5rem]">—</span>
-        }
-      </div>
-      {holeCards.length > 0 && community.length >= 3 && (
-        <span className="text-[10px] text-yellow-300/80 bg-yellow-900/20 border border-yellow-700/30 rounded px-1.5 py-0.5 whitespace-nowrap">
-          {handJp}
-        </span>
-      )}
-      <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase shrink-0 ${badge}`}>
-        {last.action}
-      </span>
-    </div>
-  )
-}
-
 // タイムラインカード（AI・人間共通）
-function TimelineCard({ entry, isHuman }: { entry: ReasoningEntry; isHuman: boolean }) {
+// isHuman: reasoning==='' (human) or '(rule-based)' (rule AI)
+function isHumanEntry(e: ReasoningEntry) { return e.reasoning === '' }
+function isRuleAi(e: ReasoningEntry)     { return e.reasoning === '(rule-based)' }
+
+function TimelineCard({ entry }: { entry: ReasoningEntry }) {
+  const human   = isHumanEntry(entry)
+  const ruleAi  = isRuleAi(entry)
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
-  const containerCls = isHuman
-    ? 'rounded-lg border border-green-700/30 bg-green-900/10 p-2.5'
-    : 'rounded-lg border border-white/10 bg-black/30 p-2.5 space-y-1.5'
-  const nameCls = isHuman ? 'text-sm font-semibold text-green-300' : 'text-sm font-semibold text-white'
-  const showChip = entry.amount != null && entry.amount > 0 &&
+  const showChip   = entry.amount != null && entry.amount > 0 &&
     (entry.action === 'raise' || entry.action === 'all-in' || entry.action === 'call' ||
      (entry.action as string) === 'sb' || (entry.action as string) === 'bb')
+
+  const containerCls = human
+    ? 'rounded-lg border border-green-700/30 bg-green-900/10 p-2.5'
+    : 'rounded-lg border border-white/10 bg-black/30 p-2.5 space-y-1.5'
+  const nameCls = human ? 'text-sm font-semibold text-green-300' : 'text-sm font-semibold text-white'
+
   return (
     <div className={containerCls}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className={nameCls}>{entry.playerName}</span>
+        {entry.position && (
+          <span className="text-[10px] text-orange-300/80 bg-orange-900/20 border border-orange-700/30 rounded px-1.5 py-0.5 font-mono">
+            {entry.position}
+          </span>
+        )}
         {showChip && <PokerChip amount={entry.amount!} />}
         <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
           {entry.action}{amtLabel}
@@ -152,76 +139,105 @@ function TimelineCard({ entry, isHuman }: { entry: ReasoningEntry; isHuman: bool
             {entry.phase}
           </span>
         )}
-        {!isHuman && entry.position && (
-          <span className="text-[10px] text-orange-300/80 bg-orange-900/20 border border-orange-700/30 rounded px-1.5 py-0.5 font-mono">
-            {entry.position}
-          </span>
-        )}
         {entry.holeCards.length > 0 && (
           <div className="flex gap-1 ml-1">
             {entry.holeCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}
           </div>
         )}
       </div>
-      {!isHuman && entry.reasoning && (
+      {!human && !ruleAi && entry.reasoning && (
         <p className="text-xs text-white/70 leading-relaxed">{entry.reasoning}</p>
       )}
     </div>
   )
 }
 
-// ハンドまとめ
-function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
-  // 全エントリの中で最大枚数のcommunityCardsを使う
+// ──────────────────────────────────────────────────────────────────────────────
+// 折りたたみ可能なハンドまとめ
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface HandSummaryProps {
+  handNumber: number
+  entries: ReasoningEntry[]
+  /** Net chips for the human player this hand (undefined = unknown) */
+  netChips?: number
+  /** Default expanded state */
+  defaultExpanded?: boolean
+}
+
+function HandSummary({ handNumber, entries, netChips, defaultExpanded = false }: HandSummaryProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+
   const community = entries.reduce<Card[]>(
     (best, e) => (e.communityCards ?? []).length > best.length ? (e.communityCards ?? []) : best,
     []
   )
 
-  // AIプレイヤーのみホールカード行に表示（reasoning があるエントリ）
-  const aiPlayerMap = new Map<string, ReasoningEntry[]>()
-  for (const e of entries) {
-    if (e.reasoning !== '') {
-      if (!aiPlayerMap.has(e.playerId)) aiPlayerMap.set(e.playerId, [])
-      aiPlayerMap.get(e.playerId)!.push(e)
-    }
-  }
+  // Humanエントリを探す
+  const humanEntries = entries.filter(isHumanEntry)
+  const humanFirst   = humanEntries[0]
+  const humanHoleCards: Card[] = humanFirst?.holeCards ?? []
+  const humanPosition: string | null = humanFirst?.position ?? null
+  const handJp = getHandJp(humanHoleCards, community)
 
-  // タイムラインはtimestamp順（reasoningLogに追加順なのでほぼ保証されているが念のため）
+  // タイムラインはtimestamp順
   const timeline = [...entries].sort((a, b) => a.timestamp - b.timestamp)
+
+  const netLabel = netChips != null
+    ? netChips >= 0
+      ? <span className="text-green-400 font-mono text-xs">+{netChips}</span>
+      : <span className="text-red-400 font-mono text-xs">{netChips}</span>
+    : null
 
   return (
     <div className="rounded-xl border border-white/15 bg-white/5 overflow-hidden">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between px-3 py-2 bg-black/30 border-b border-white/10">
-        <span className="text-xs font-bold text-purple-300 font-mono uppercase tracking-widest">
-          Hand #{handNumber}
-        </span>
-        <span className="text-xs text-white/40">{entries.length} アクション</span>
-      </div>
-
-      {/* ボードカード */}
-      <BoardCards community={community} />
-
-      {/* AIプレイヤーホールカード一覧 */}
-      {aiPlayerMap.size > 0 && (
-        <div className="border-b border-white/10">
-          {[...aiPlayerMap.entries()].map(([playerId, pEntries]) => (
-            <PlayerRow key={playerId} entries={pEntries} community={community} />
-          ))}
+      {/* ヘッダー（常時表示・クリックで折りたたみ） */}
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 bg-black/30 border-b border-white/10 hover:bg-black/40 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-purple-300 font-mono uppercase tracking-widest">
+            Hand #{handNumber}
+          </span>
+          {humanPosition && (
+            <span className="text-[10px] text-orange-300/80 bg-orange-900/20 border border-orange-700/30 rounded px-1.5 py-0.5 font-mono">
+              {humanPosition}
+            </span>
+          )}
+          {/* 最小化時: ホールカード + ネット損益 */}
+          {!expanded && humanHoleCards.length > 0 && (
+            <div className="flex gap-1 items-center ml-1">
+              {humanHoleCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}
+              {community.length >= 3 && (
+                <span className="text-[10px] text-yellow-300/70 ml-1">{handJp}</span>
+              )}
+            </div>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {netLabel}
+          <span className="text-white/30 text-xs">{expanded ? '▲' : '▼'}</span>
+        </div>
+      </button>
 
-      {/* タイムライン */}
-      <div className="px-3 py-2 space-y-1.5">
-        {timeline.map((entry) => (
-          <TimelineCard
-            key={`${entry.playerId}-${entry.timestamp}`}
-            entry={entry}
-            isHuman={entry.reasoning === ''}
-          />
-        ))}
-      </div>
+      {/* 展開時のみ表示 */}
+      {expanded && (
+        <>
+          {/* ボードカード */}
+          <BoardCards community={community} />
+
+          {/* タイムライン */}
+          <div className="px-3 py-2 space-y-1.5">
+            {timeline.map((entry) => (
+              <TimelineCard
+                key={`${entry.playerId}-${entry.timestamp}`}
+                entry={entry}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -248,15 +264,15 @@ interface Props {
 }
 
 export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
-  const claudeEnabled  = useGameStore((s) => s.claudeEnabled)
-  const claudeThinking = useGameStore((s) => s.claudeThinking)
-  const reasoningLog   = useGameStore((s) => s.reasoningLog)
-  const players        = useGameStore((s) => s.players)
-  const activeIdx      = useGameStore((s) => s.activePlayerIndex)
-
-  if (!claudeEnabled) return null
+  const claudeThinking    = useGameStore((s) => s.claudeThinking)
+  const reasoningLog      = useGameStore((s) => s.reasoningLog)
+  const players           = useGameStore((s) => s.players)
+  const activeIdx         = useGameStore((s) => s.activePlayerIndex)
+  const handNumber        = useGameStore((s) => s.handNumber)
+  const chipsAtHandStart  = useGameStore((s) => s._chipsAtHandStart)
 
   const thinkingPlayer = claudeThinking && activeIdx !== -1 ? players[activeIdx] : null
+  const humanPlayer    = players.find((p) => p.isHuman)
 
   const filtered = focusPlayerId
     ? reasoningLog.filter((e) => e.playerId === focusPlayerId)
@@ -276,9 +292,22 @@ export function ClaudeReasoningPanel({ focusPlayerId, className = '' }: Props) {
       {claudeThinking && thinkingPlayer && (
         <ThinkingIndicator playerName={thinkingPlayer.name} />
       )}
-      {sortedHands.map(([handNumber, entries]) => (
-        <HandSummary key={handNumber} handNumber={handNumber} entries={entries} />
-      ))}
+      {sortedHands.map(([hn, entries], i) => {
+        // 現在のハンドのみネット損益を計算できる
+        let netChips: number | undefined
+        if (hn === handNumber && humanPlayer != null && chipsAtHandStart > 0) {
+          netChips = humanPlayer.chips - chipsAtHandStart
+        }
+        return (
+          <HandSummary
+            key={hn}
+            handNumber={hn}
+            entries={entries}
+            netChips={netChips}
+            defaultExpanded={i === 0}  // 最新ハンドのみデフォルト展開
+          />
+        )
+      })}
     </div>
   )
 }

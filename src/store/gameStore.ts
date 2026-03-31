@@ -153,34 +153,11 @@ export const useGameStore = create<GameStore>()(
       const humanIsFolding = stateSnapshot.players[stateSnapshot.activePlayerIndex]?.isHuman
         && action === 'fold'
 
-      // Record human action into reasoningLog so it appears in the AI thought timeline
+      // Record human action into reasoningLog so it appears in the history timeline
       if (activePlayer?.isHuman) {
-        const n = stateSnapshot.players.length
-        const d = stateSnapshot.dealerIndex
-        const idx = stateSnapshot.activePlayerIndex
-        const rel = n < 2 ? -1 : (idx - d + n) % n
-        let position: string | null = null
-        if (n >= 2) {
-          if (n === 2) position = rel === 0 ? 'BTN/SB' : 'BB'
-          else {
-            const posMap: Record<number, string> = { 0: 'BTN', 1: 'SB', 2: 'BB' }
-            if (rel in posMap) position = posMap[rel]
-            else if (rel === n - 1) position = 'CO'
-            else position = 'MP'
-          }
-        }
-        const humanEntry: import('@/store/gameStore').ReasoningEntry = {
-          playerId: activePlayer.id,
-          playerName: activePlayer.name,
-          action,
-          amount,
-          reasoning: '',
-          handNumber: stateSnapshot.handNumber,
-          timestamp: Date.now(),
-          communityCards: stateSnapshot.communityCards.map((c) => ({ ...c })),
+        const humanEntry: ReasoningEntry = {
+          ...buildReasoningEntry(stateSnapshot as import('@/game/types').GameState, activePlayer, action, amount, ''),
           holeCards: humanHoleCards,
-          phase: stateSnapshot.phase,
-          position,
         }
         set((s) => {
           s.latestReasoning[activePlayer.id] = humanEntry
@@ -307,20 +284,7 @@ export const useGameStore = create<GameStore>()(
 
         claudeDecideAction(state, player)
           .then((decision) => {
-            // Record reasoning
-            const entry: ReasoningEntry = {
-              playerId: player.id,
-              playerName: player.name,
-              action: decision.action,
-              amount: decision.amount,
-              reasoning: decision.reasoning,
-              handNumber: state.handNumber,
-              timestamp: Date.now(),
-              communityCards: [...state.communityCards],
-              holeCards: [...(player.holeCards.length > 0 ? player.holeCards : (state.players.find(p => p.id === player.id)?.holeCards ?? []))],
-              phase: state.phase,
-              position: (() => { const idx = state.players.findIndex(p => p.id === player.id); const n = state.players.length; const d = state.dealerIndex; if (n < 2) return null; const rel = (idx - d + n) % n; if (n === 2) return rel === 0 ? 'BTN/SB' : 'BB'; const pos: Record<number,string> = {0:'BTN',1:'SB',2:'BB'}; if (rel in pos) return pos[rel]; if (rel === n-1) return 'CO'; return 'MP'; })(),
-            }
+            const entry: ReasoningEntry = buildReasoningEntry(state, player, decision.action, decision.amount, decision.reasoning)
             set((s) => {
               s.claudeThinking = false
               s.latestReasoning[player.id] = entry
@@ -342,6 +306,11 @@ export const useGameStore = create<GameStore>()(
       } else {
         // ── Rule-based path (sync) ─────────────────────────────────────────
         const { action, amount } = decideAction(state, player, state.aiDifficulty)
+        const entry: ReasoningEntry = buildReasoningEntry(state, player, action, amount, '(rule-based)')
+        set((s) => {
+          s.latestReasoning[player.id] = entry
+          s.reasoningLog.push(entry)
+        })
         get().playerAction(action, amount)
       }
     },
@@ -374,6 +343,41 @@ export const useGameStore = create<GameStore>()(
 // ──────────────────────────────────────────────────────────────────────────────
 // Helper
 // ──────────────────────────────────────────────────────────────────────────────
+
+/** Compute position label for a player given dealer index */
+export function calcPosition(playerIndex: number, numPlayers: number, dealerIndex: number): string | null {
+  if (numPlayers < 2) return null
+  const rel = (playerIndex - dealerIndex + numPlayers) % numPlayers
+  if (numPlayers === 2) return rel === 0 ? 'BTN/SB' : 'BB'
+  const posMap: Record<number, string> = { 0: 'BTN', 1: 'SB', 2: 'BB' }
+  if (rel in posMap) return posMap[rel]
+  if (rel === numPlayers - 1) return 'CO'
+  return 'MP'
+}
+
+/** Build a ReasoningEntry for any player action */
+export function buildReasoningEntry(
+  state: import('@/game/types').GameState,
+  player: Player,
+  action: ActionType,
+  amount: number | undefined,
+  reasoning: string,
+): ReasoningEntry {
+  const idx = state.players.findIndex((p) => p.id === player.id)
+  return {
+    playerId: player.id,
+    playerName: player.name,
+    action,
+    amount,
+    reasoning,
+    handNumber: state.handNumber,
+    timestamp: Date.now(),
+    communityCards: state.communityCards.map((c) => ({ ...c })),
+    holeCards: player.holeCards.map((c) => ({ ...c })),
+    phase: state.phase,
+    position: calcPosition(idx, state.players.length, state.dealerIndex),
+  }
+}
 
 function scheduleAiIfNeeded(get: () => GameStore) {
   const state = get()
