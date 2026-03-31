@@ -372,7 +372,7 @@ export async function claudeDecideAction(
   })
 
   // Extract text content
-  const textBlock = response.content.find((b) => b.type === 'text')
+  const textBlock = (response.content as Array<{type: string; text?: string}>).find((b) => b.type === 'text')
   if (!textBlock || textBlock.type !== 'text') {
     throw new Error('No text content in Claude response')
   }
