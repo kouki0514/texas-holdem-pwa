@@ -147,8 +147,20 @@ export function GameScreen() {
           winners={winners}
           communityCards={communityCards}
           onNextHand={handleNextHand}
-          onClose={handleNextHand}
+          onClose={() => setShowResult(false)}
         />
+      )}
+
+      {/* Next hand floating button — shown when Showdown is closed but phase is still showdown */}
+      {phase === 'showdown' && !showResult && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
+          <button
+            onClick={handleNextHand}
+            className="px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-full shadow-2xl text-sm transition-colors"
+          >
+            次のハンド →
+          </button>
+        </div>
       )}
 
       {/* Stats overlay */}
