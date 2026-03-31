@@ -377,6 +377,6 @@ export async function claudeDecideAction(
     throw new Error('No text content in Claude response')
   }
 
-  const raw = extractJson(textBlock.text)
+  const raw = extractJson(textBlock.text!)
   return sanitise(raw, state, player)
 }
