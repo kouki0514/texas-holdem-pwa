@@ -30,6 +30,8 @@ export interface ReasoningEntry {
   reasoning: string
   handNumber: number
   timestamp: number
+  phase: string
+  position: string | null
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -276,6 +278,8 @@ export const useGameStore = create<GameStore>()(
               timestamp: Date.now(),
               communityCards: [...state.communityCards],
               holeCards: [...(player.holeCards.length > 0 ? player.holeCards : (state.players.find(p => p.id === player.id)?.holeCards ?? []))],
+              phase: state.phase,
+              position: (() => { const idx = state.players.findIndex(p => p.id === player.id); const n = state.players.length; const d = state.dealerIndex; if (n < 2) return null; const rel = (idx - d + n) % n; if (n === 2) return rel === 0 ? 'BTN/SB' : 'BB'; const pos: Record<number,string> = {0:'BTN',1:'SB',2:'BB'}; if (rel in pos) return pos[rel]; if (rel === n-1) return 'CO'; return 'MP'; })(),
             }
             set((s) => {
               s.claudeThinking = false

@@ -140,6 +140,16 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
         <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
           {entry.action}{amtLabel}
         </span>
+        {entry.phase && (
+          <span className="text-[10px] text-cyan-400/80 bg-cyan-900/20 border border-cyan-700/30 rounded px-1.5 py-0.5 font-mono uppercase">
+            {entry.phase}
+          </span>
+        )}
+        {entry.position && (
+          <span className="text-[10px] text-orange-300/80 bg-orange-900/20 border border-orange-700/30 rounded px-1.5 py-0.5 font-mono">
+            {entry.position}
+          </span>
+        )}
       </div>
       {entry.reasoning && (
         <p className="text-xs text-white/70 leading-relaxed">{entry.reasoning}</p>
