@@ -10,6 +10,8 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { ActionType, Card, GameState, Player, PlayerAction } from '@/game/types'
+import { evaluateHand } from '@/game/handEvaluator'
+import { rankToValue } from '@/game/deck'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -122,6 +124,51 @@ function classifyHoleCards(cards: [Card, Card]): string {
   return `${combo} — Tier5 Weak (fold from EP/MP, bluff-raise BTN occasionally)`
 }
 
+/** Classify made hand on flop/turn/river using evaluateHand result */
+function classifyMadeHand(holeCards: [Card, Card], communityCards: Card[]): string {
+  const result = evaluateHand(holeCards, communityCards)
+  const { rank, kickers } = result
+
+  // Tier 1: Straight or better
+  if (
+    rank === 'straight' ||
+    rank === 'flush' ||
+    rank === 'full-house' ||
+    rank === 'four-of-a-kind' ||
+    rank === 'straight-flush' ||
+    rank === 'royal-flush'
+  ) {
+    const label: Record<string, string> = {
+      'straight': 'ストレート',
+      'flush': 'フラッシュ',
+      'full-house': 'フルハウス',
+      'four-of-a-kind': 'フォーオブアカインド',
+      'straight-flush': 'ストレートフラッシュ',
+      'royal-flush': 'ロイヤルフラッシュ',
+    }
+    return `${label[rank]} — Tier1 Strong made hand (bet/raise for value, protect vs draws)`
+  }
+
+  // Tier 2: Two pair or three of a kind
+  if (rank === 'two-pair' || rank === 'three-of-a-kind') {
+    const label = rank === 'two-pair' ? 'ツーペア' : 'スリーカード'
+    return `${label} — Tier2 Strong (bet/raise for value and protection)`
+  }
+
+  // Tier 3 / Tier 4: One pair — distinguish top pair vs under pair
+  if (rank === 'one-pair') {
+    const pairRankValue = kickers[0] // score[1] = pair rank value
+    const boardHighValue = Math.max(...communityCards.map((c) => rankToValue(c.rank)))
+    if (pairRankValue >= boardHighValue) {
+      return `ワンペア(トップペア以上) — Tier3 Decent (bet for value/protection, call reasonable bets)`
+    }
+    return `ワンペア(ミドル/ボトムペア) — Tier4 Marginal (check/call small bets, fold to heavy pressure)`
+  }
+
+  // Tier 5: High card
+  return `ハイカード — Tier5 Weak (bluff only with good equity/draw; fold to aggression)`
+}
+
 function buildSystemPrompt(state: GameState, player: Player): string {
   const holeCards = player.holeCards as [Card, Card]
   const toCall = Math.max(0, state.currentBet - player.currentBet)
@@ -179,7 +226,9 @@ function buildSystemPrompt(state: GameState, player: Player): string {
     : 'Set your own bet size — 1/3 pot needs 25% bluffs, 1/2 pot needs 33%, 2/3 pot needs 40%'
 
   // ── Hole card strength ───────────────────────────────────────────────────────
-  const handStrength = classifyHoleCards(holeCards)
+  const handStrength = state.communityCards.length > 0
+    ? classifyMadeHand(holeCards, state.communityCards)
+    : classifyHoleCards(holeCards)
 
   // ── Valid actions list ───────────────────────────────────────────────────────
   const validActions: string[] = ['fold']
