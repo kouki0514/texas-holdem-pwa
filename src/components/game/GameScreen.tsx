@@ -124,7 +124,7 @@ export function GameScreen() {
 
       {/* AI思考サイドパネル (fixed, 右側, メインに影響なし) */}
       {showReasoning && (
-        <div className="fixed top-12 right-0 bottom-0 w-80 bg-black/80 backdrop-blur-sm border-l border-white/10 flex flex-col z-40">
+        <div className="fixed top-12 right-0 bottom-0 w-[420px] bg-black/85 backdrop-blur-sm border-l border-white/10 flex flex-col z-40">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
             <span className="text-[11px] text-purple-300 font-mono uppercase tracking-widest">AI の思考</span>
             <button

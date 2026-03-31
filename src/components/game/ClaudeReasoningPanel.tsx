@@ -150,8 +150,11 @@ function ReasoningCard({ entry }: { entry: ReasoningEntry }) {
 
 // ハンドまとめ
 function HandSummary({ handNumber, entries }: { handNumber: number; entries: ReasoningEntry[] }) {
-  const first     = entries[0]
-  const community = first?.communityCards ?? []
+  // 全エントリの中で最大枚数のcommunityCardsを使う（プリフロップ時は空のため）
+  const community = entries.reduce<import('@/game/types').Card[]>(
+    (best, e) => (e.communityCards ?? []).length > best.length ? (e.communityCards ?? []) : best,
+    []
+  )
 
   const playerMap = new Map<string, ReasoningEntry[]>()
   for (const e of entries) {
