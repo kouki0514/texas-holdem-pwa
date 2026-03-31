@@ -15,17 +15,15 @@ export function GameScreen() {
   const dealerIndex    = useGameStore((s) => s.dealerIndex)
   const winners        = useGameStore((s) => s.winners)
   const claudeThinking = useGameStore((s) => s.claudeThinking)
-  const actionHistory   = useGameStore((s) => s.actionHistory)
+  const actionHistory  = useGameStore((s) => s.actionHistory)
   const actedThisStreet = useGameStore((s) => s.actedThisStreet)
-  const quitGame        = useGameStore((s) => s.quitGame)
+  const quitGame       = useGameStore((s) => s.quitGame)
 
-  // Latest action per player, restricted to players who have acted THIS street
   const actedSet = new Set(actedThisStreet)
   const lastActionMap = actionHistory.reduce<Record<string, import('@/game/types').ActionType>>(
     (acc, a) => { acc[a.playerId] = a.action; return acc },
     {},
   )
-  // Clear entries for players who haven't acted this street
   for (const id of Object.keys(lastActionMap)) {
     if (!actedSet.has(id)) delete lastActionMap[id]
   }
@@ -35,6 +33,7 @@ export function GameScreen() {
   const [showResult, setShowResult] = useState(false)
   const [showQuitConfirm, setShowQuitConfirm] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [showReasoning, setShowReasoning] = useState(false)
   useEffect(() => { if (phase === 'showdown') setShowResult(true) }, [phase])
 
   const handleNextHand = () => { setShowResult(false); startNewHand() }
@@ -44,13 +43,9 @@ export function GameScreen() {
   const human     = humanPlayer ?? players[0]
 
   return (
-    /**
-     * Outer shell: full-viewport column, no overflow.
-     * Each section declares its own size so nothing spills out.
-     */
     <div className="flex flex-col w-screen h-screen bg-felt-dark overflow-hidden select-none">
 
-      {/* ── 1. Top bar ──────────────────────────────── shrink-0, ~40 px */}
+      {/* 1. Top bar */}
       <header className="shrink-0 flex items-center justify-between
                          px-3 py-1.5 bg-black/40 border-b border-white/10">
         <span className="text-[11px] text-white/40 font-mono uppercase tracking-widest">
@@ -61,6 +56,17 @@ export function GameScreen() {
         )}
         <div className="flex items-center gap-2">
           <ClaudeToggle />
+          {/* AI思考ボタン */}
+          <button
+            onClick={() => setShowReasoning((v) => !v)}
+            className={`text-[11px] font-mono uppercase tracking-widest transition-colors px-2 py-0.5 rounded border ${
+              showReasoning
+                ? 'text-purple-300 border-purple-400/60 bg-purple-900/30'
+                : 'text-white/40 border-white/20 hover:text-white'
+            }`}
+          >
+            AI思考
+          </button>
           <button
             onClick={() => setShowStats(true)}
             className="text-[11px] text-white/40 hover:text-white transition-colors font-mono uppercase tracking-widest"
@@ -76,7 +82,7 @@ export function GameScreen() {
         </div>
       </header>
 
-      {/* ── 2. Opponents ────────────────────────────── shrink-0, min-h guaranteed */}
+      {/* 2. Opponents */}
       <section className="shrink-0 flex justify-around items-center flex-wrap
                           gap-x-2 gap-y-1 px-3 pt-2 pb-1 min-h-[80px]">
         {opponents.map((p) => (
@@ -90,7 +96,7 @@ export function GameScreen() {
         ))}
       </section>
 
-      {/* ── 3. Table ────────────────────────────────── flex-1, min-h-0, max-h capped */}
+      {/* 3. Table */}
       <section className="flex-1 min-h-0 max-h-[280px] flex items-center justify-center px-3 py-2">
         <div className="w-full max-w-xl py-5 px-6
                         bg-felt rounded-[48px] border-4 border-felt-light/30
@@ -99,7 +105,7 @@ export function GameScreen() {
         </div>
       </section>
 
-      {/* ── 4. Human seat ───────────────────────────── shrink-0 */}
+      {/* 4. Human seat */}
       {human && (
         <section className="shrink-0 flex justify-center py-1">
           <PlayerSeat
@@ -111,17 +117,30 @@ export function GameScreen() {
         </section>
       )}
 
-      {/* ── 5. Action bar ───────────────────────────── shrink-0 */}
+      {/* 5. Action bar */}
       <section className="shrink-0 px-3 pb-1">
         <ActionBar />
       </section>
 
-      {/* ── 6. Claude reasoning (collapsible height) ── shrink-0 */}
-      <section className="shrink-0 px-3 pb-2 max-h-28 overflow-y-auto">
-        <ClaudeReasoningPanel maxEntries={2} />
-      </section>
+      {/* AI思考サイドパネル (fixed, 右側, メインに影響なし) */}
+      {showReasoning && (
+        <div className="fixed top-12 right-0 bottom-0 w-80 bg-black/80 backdrop-blur-sm border-l border-white/10 flex flex-col z-40">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
+            <span className="text-[11px] text-purple-300 font-mono uppercase tracking-widest">AI の思考</span>
+            <button
+              onClick={() => setShowReasoning(false)}
+              className="text-white/40 hover:text-white text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <ClaudeReasoningPanel maxEntries={10} />
+          </div>
+        </div>
+      )}
 
-      {/* ── Showdown overlay ──────────────────────────────────── */}
+      {/* Showdown overlay */}
       {showResult && phase === 'showdown' && winners.length > 0 && (
         <ShowdownResult
           players={players}
@@ -131,17 +150,15 @@ export function GameScreen() {
         />
       )}
 
-      {/* ── Stats overlay ────────────────────────────────────── */}
+      {/* Stats overlay */}
       {showStats && <StatsScreen onClose={() => setShowStats(false)} />}
 
-      {/* ── Quit confirm dialog ───────────────────────────────── */}
+      {/* Quit confirm */}
       {showQuitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-felt-dark border border-white/20 rounded-2xl p-6 w-72 flex flex-col gap-4 shadow-2xl">
             <h2 className="text-lg font-bold text-white text-center">ゲームを退出しますか？</h2>
-            <p className="text-sm text-white/60 text-center">
-              現在のハンドを中断してリザルト画面に移動します。
-            </p>
+            <p className="text-sm text-white/60 text-center">現在のハンドを中断してリザルト画面に移動します。</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowQuitConfirm(false)}
@@ -159,6 +176,7 @@ export function GameScreen() {
           </div>
         </div>
       )}
+
     </div>
   )
 }
