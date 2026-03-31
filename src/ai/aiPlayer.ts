@@ -4,71 +4,154 @@ import { evaluateHand } from '@/game/handEvaluator'
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
 
-// ══════════════════════════════════════════════════════════
-// 50BB レーキなし 6max プリフロップレンジ
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// 6max プリフロップレンジ (R=raise/3bet, C=call, F=fold)
+// ─────────────────────────────────────────────────────────────────────────────
+
 const OPEN_RANGES: Record<string, Record<string, string>> = {
-  UTG: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'M',66:'M',55:'M',44:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'M',A7s:'M',A6s:'M',A5s:'R',A4s:'M',A3s:'M',A2s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'M',K8s:'M',K7s:'M',K6s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'M', QJs:'R',QTs:'R',Q9s:'M',Q8s:'M', QJo:'R',QTo:'M', JTs:'R',J9s:'M',J8s:'M', JTo:'M', T9s:'R',T8s:'M', '98s':'M','87s':'M','76s':'M' },
-  HJ:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'M',55:'M',44:'M',33:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'M',A6s:'M',A5s:'R',A4s:'M',A3s:'M',A2s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'M',K7s:'M',K6s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'M', QJs:'R',QTs:'R',Q9s:'R',Q8s:'M', QJo:'R',QTo:'M', JTs:'R',J9s:'R',J8s:'M', JTo:'M', T9s:'R',T8s:'M',T7s:'M', '98s':'R','97s':'M','87s':'M','76s':'M','65s':'M' },
-  CO:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'M',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'M',A2s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'M',A7o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'M',K6s:'M',K5s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'R',K8o:'M', QJs:'R',QTs:'R',Q9s:'R',Q8s:'M',Q7s:'M', QJo:'R',QTo:'R',Q9o:'M', JTs:'R',J9s:'R',J8s:'M',J7s:'M', JTo:'R',J9o:'M', T9s:'R',T8s:'R',T7s:'M', '98s':'R','97s':'M','96s':'M','87s':'R','86s':'M','76s':'R','75s':'M','65s':'M','54s':'M' },
-  BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'R',A6o:'M',A5o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',K6s:'R',K5s:'R',K4s:'M',K3s:'M',K2s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'R',K8o:'M',K7o:'M', QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',Q7s:'M',Q6s:'M', QJo:'R',QTo:'R',Q9o:'R',Q8o:'M', JTs:'R',J9s:'R',J8s:'R',J7s:'M',J6s:'M', JTo:'R',J9o:'R',J8o:'M', T9s:'R',T8s:'R',T7s:'R',T6s:'M', T9o:'M', '98s':'R','97s':'R','96s':'M','87s':'R','86s':'R','85s':'M','76s':'R','75s':'M','65s':'R','64s':'M','54s':'R','53s':'M','43s':'M' },
-  SB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'M',22:'M', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'M',A2s:'M', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'M', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'M',K6s:'M', KQo:'R',KJo:'R',KTo:'R',K9o:'M', QJs:'R',QTs:'R',Q9s:'R',Q8s:'M', QJo:'R',QTo:'M', JTs:'R',J9s:'R',J8s:'M', JTo:'M', T9s:'R',T8s:'M', '98s':'R','87s':'M','76s':'M','65s':'M' },
-  BB:  { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R', AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R', KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R', KQo:'R',KJo:'R',KTo:'R', QJs:'R',QTs:'R',Q9s:'R', QJo:'R', JTs:'R',J9s:'R', T9s:'R','98s':'R','87s':'R','76s':'R' },
+  UTG: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',KQo:'R',KJo:'R',KTo:'R',
+    QJs:'R',QTs:'R',Q9s:'R',QJo:'R',QTo:'R',
+    JTs:'R',J9s:'R',JTo:'R',T9s:'R',T8s:'R',98s:'R',87s:'R',76s:'R',65s:'R',54s:'R' },
+  HJ: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',KQo:'R',KJo:'R',KTo:'R',
+    QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',QJo:'R',QTo:'R',
+    JTs:'R',J9s:'R',J8s:'R',JTo:'R',T9s:'R',T8s:'R',T7s:'R',98s:'R',97s:'R',87s:'R',86s:'R',76s:'R',75s:'R',65s:'R',64s:'R',54s:'R',53s:'R' },
+  CO: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',K6s:'R',KQo:'R',KJo:'R',KTo:'R',K9o:'R',
+    QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',Q7s:'R',QJo:'R',QTo:'R',Q9o:'R',
+    JTs:'R',J9s:'R',J8s:'R',J7s:'R',JTo:'R',J9o:'R',
+    T9s:'R',T8s:'R',T7s:'R',T6s:'R',T9o:'R',98s:'R',97s:'R',96s:'R',87s:'R',86s:'R',76s:'R',75s:'R',65s:'R',64s:'R',54s:'R',53s:'R',43s:'R' },
+  BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'R',A6o:'R',A5o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',K6s:'R',K5s:'R',KQo:'R',KJo:'R',KTo:'R',K9o:'R',K8o:'R',
+    QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',Q7s:'R',Q6s:'R',QJo:'R',QTo:'R',Q9o:'R',Q8o:'R',
+    JTs:'R',J9s:'R',J8s:'R',J7s:'R',J6s:'R',JTo:'R',J9o:'R',J8o:'R',
+    T9s:'R',T8s:'R',T7s:'R',T6s:'R',T5s:'R',T9o:'R',T8o:'R',
+    98s:'R',97s:'R',96s:'R',95s:'R',87s:'R',86s:'R',85s:'R',76s:'R',75s:'R',74s:'R',65s:'R',64s:'R',54s:'R',53s:'R',43s:'R',42s:'R',32s:'R' },
+  SB: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',KQo:'R',KJo:'R',KTo:'R',K9o:'R',
+    QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',QJo:'R',QTo:'R',Q9o:'R',
+    JTs:'R',J9s:'R',J8s:'R',JTo:'R',J9o:'R',
+    T9s:'R',T8s:'R',T7s:'R',T9o:'R',98s:'R',97s:'R',87s:'R',86s:'R',76s:'R',75s:'R',65s:'R',54s:'R' },
+  BB: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'R',88:'R',77:'R',66:'R',55:'R',44:'R',33:'R',22:'R',
+    AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'R',A8s:'R',A7s:'R',A6s:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+    AKo:'R',AQo:'R',AJo:'R',ATo:'R',A9o:'R',A8o:'R',A7o:'R',A6o:'R',
+    KQs:'R',KJs:'R',KTs:'R',K9s:'R',K8s:'R',K7s:'R',K6s:'R',KQo:'R',KJo:'R',KTo:'R',K9o:'R',
+    QJs:'R',QTs:'R',Q9s:'R',Q8s:'R',Q7s:'R',QJo:'R',QTo:'R',Q9o:'R',
+    JTs:'R',J9s:'R',J8s:'R',J7s:'R',JTo:'R',J9o:'R',
+    T9s:'R',T8s:'R',T7s:'R',T6s:'R',T9o:'R',T8o:'R',
+    98s:'R',97s:'R',96s:'R',87s:'R',86s:'R',76s:'R',75s:'R',65s:'R',64s:'R',54s:'R',53s:'R',43s:'R' },
 }
 
-const BTN_VS_CO: Record<string,string> = { AA:'R',KK:'R',QQ:'R',JJ:'C',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'R',ATs:'C',A9s:'C',A8s:'C',A7s:'C',A6s:'C',A5s:'R',A4s:'C',A3s:'C',A2s:'C', AKo:'R',AQo:'C',AJo:'C',ATo:'C',A9o:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C',K7s:'C', KQo:'C',KJo:'C',KTo:'C', QJs:'C',QTs:'C',Q9s:'C',Q8s:'C', QJo:'C',QTo:'C', JTs:'C',J9s:'C',J8s:'C', JTo:'C', T9s:'C',T8s:'C',T7s:'C', '98s':'C','97s':'C','87s':'C','86s':'C','76s':'C','75s':'C','65s':'C','64s':'C','54s':'C' }
-const BTN_VS_EP: Record<string,string> = { AA:'R',KK:'R',QQ:'R',JJ:'C',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'C',ATs:'C',A9s:'C',A8s:'C',A5s:'R',A4s:'C',A3s:'C', AKo:'R',AQo:'C',AJo:'C',ATo:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C', KQo:'C',KJo:'C', QJs:'C',QTs:'C',Q9s:'C', JTs:'C',J9s:'C', T9s:'C',T8s:'C', '98s':'C','87s':'C','76s':'C','65s':'C' }
-const CO_VS_EP: Record<string,string>  = { AA:'R',KK:'R',QQ:'R',JJ:'C',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C', AKs:'R',AQs:'R',AJs:'C',ATs:'C',A9s:'C',A5s:'R',A4s:'C', AKo:'R',AQo:'C',AJo:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C', KQo:'C',KJo:'C', QJs:'C',QTs:'C', JTs:'C',J9s:'C', T9s:'C', '98s':'C','87s':'C','76s':'C' }
-const SB_VS_BTN: Record<string,string> = { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'R',ATs:'R',A9s:'C',A8s:'C',A7s:'C',A6s:'C',A5s:'R',A4s:'C',A3s:'C',A2s:'C', AKo:'R',AQo:'R',AJo:'C',ATo:'C',A9o:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C',K7s:'C', KQo:'C',KJo:'C',KTo:'C', QJs:'C',QTs:'C',Q9s:'C',Q8s:'C', QJo:'C',QTo:'C', JTs:'C',J9s:'C',J8s:'C', T9s:'C',T8s:'C', '98s':'C','87s':'C','76s':'C','65s':'C' }
-const BB_VS_BTN: Record<string,string> = { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'R',ATs:'C',A9s:'C',A8s:'C',A7s:'C',A6s:'C',A5s:'R',A4s:'C',A3s:'C',A2s:'C', AKo:'R',AQo:'R',AJo:'C',ATo:'C',A9o:'C',A8o:'C',A7o:'C',A6o:'C',A5o:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C',K7s:'C',K6s:'C',K5s:'C',K4s:'C',K3s:'C',K2s:'C', KQo:'C',KJo:'C',KTo:'C',K9o:'C',K8o:'C',K7o:'C', QJs:'C',QTs:'C',Q9s:'C',Q8s:'C',Q7s:'C',Q6s:'C', QJo:'C',QTo:'C',Q9o:'C',Q8o:'C', JTs:'C',J9s:'C',J8s:'C',J7s:'C',J6s:'C', JTo:'C',J9o:'C',J8o:'C', T9s:'C',T8s:'C',T7s:'C',T6s:'C', T9o:'C',T8o:'C', '98s':'C','97s':'C','96s':'C','87s':'C','86s':'C','85s':'C','76s':'C','75s':'C','65s':'C','64s':'C','54s':'C','53s':'C','43s':'C' }
-const BB_VS_CO: Record<string,string>  = { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'R',ATs:'C',A9s:'C',A8s:'C',A7s:'C',A6s:'C',A5s:'R',A4s:'C',A3s:'C',A2s:'C', AKo:'R',AQo:'R',AJo:'C',ATo:'C',A9o:'C',A8o:'C',A7o:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C',K7s:'C',K6s:'C',K5s:'C', KQo:'C',KJo:'C',KTo:'C',K9o:'C',K8o:'C', QJs:'C',QTs:'C',Q9s:'C',Q8s:'C',Q7s:'C', QJo:'C',QTo:'C',Q9o:'C', JTs:'C',J9s:'C',J8s:'C',J7s:'C', JTo:'C',J9o:'C', T9s:'C',T8s:'C',T7s:'C', T9o:'C', '98s':'C','97s':'C','87s':'C','86s':'C','76s':'C','75s':'C','65s':'C','54s':'C' }
-const BB_VS_EP: Record<string,string>  = { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'C',99:'C',88:'C',77:'C',66:'C',55:'C',44:'C',33:'C',22:'C', AKs:'R',AQs:'R',AJs:'R',ATs:'C',A9s:'C',A8s:'C',A7s:'C',A5s:'R',A4s:'C',A3s:'C', AKo:'R',AQo:'R',AJo:'C',ATo:'C',A9o:'C',A8o:'C', KQs:'R',KJs:'C',KTs:'C',K9s:'C',K8s:'C',K7s:'C', KQo:'C',KJo:'C',KTo:'C',K9o:'C', QJs:'C',QTs:'C',Q9s:'C',Q8s:'C', QJo:'C',QTo:'C', JTs:'C',J9s:'C',J8s:'C', JTo:'C', T9s:'C',T8s:'C', '98s':'C','87s':'C','76s':'C','65s':'C','54s':'C' }
-const VS_3BET: Record<string,string>   = { AA:'R',KK:'R',QQ:'C',JJ:'C',TT:'C',99:'C', AKs:'R',AQs:'C',AJs:'C',ATs:'C',A5s:'R',A4s:'R', AKo:'R',AQo:'C', KQs:'C',KJs:'C', QJs:'C' }
+// BBのコールレンジ（vs BTNスチール）
+const BB_CALL_VS_BTN: Record<string, boolean> = {
+  A9o:true,A8o:true,A7o:true,A6o:true,A5o:true,A4o:true,A3o:true,A2o:true,
+  K9o:true,K8o:true,K7o:true,K6o:true,K5o:true,
+  Q9o:true,Q8o:true,Q7o:true,Q6o:true,
+  J9o:true,J8o:true,J7o:true,
+  T8o:true,T7o:true,T6o:true,
+  98o:true,97o:true,96o:true,
+  87o:true,86o:true,76o:true,75o:true,65o:true,
+  K4s:true,K3s:true,K2s:true,Q6s:true,Q5s:true,Q4s:true,Q3s:true,Q2s:true,
+  J6s:true,J5s:true,J4s:true,J3s:true,J2s:true,
+  T5s:true,T4s:true,T3s:true,T2s:true,
+  95s:true,94s:true,85s:true,84s:true,74s:true,73s:true,63s:true,52s:true,42s:true,32s:true,
+}
 
-// ══════════════════════════════════════════════════════════
+// BBのコールレンジ（vs CO/SB）
+const BB_CALL_VS_OTHER: Record<string, boolean> = {
+  A8o:true,A7o:true,A6o:true,A5o:true,A4o:true,A3o:true,A2o:true,
+  K8o:true,K7o:true,K6o:true,K5o:true,
+  Q8o:true,Q7o:true,Q6o:true,
+  J8o:true,J7o:true,T7o:true,T6o:true,
+  97o:true,87o:true,76o:true,65o:true,
+}
+
+// SBのコールレンジ（vs BTN）
+const SB_CALL_VS_BTN: Record<string, boolean> = {
+  JTs:true,T9s:true,98s:true,87s:true,
+  ATo:true,KTo:true,QTo:true,JTo:true,
+}
+
+// 3betレンジ（ポジション別）
+const THREBET_RANGES: Record<string, Record<string, string>> = {
+  BTN_VS_CO: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',AKs:'R',AQs:'R',AJs:'R',ATs:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',KQs:'R',QJs:'R',JTs:'R',AKo:'R',AQo:'R',KQo:'R',
+    99:'C',88:'C',77:'C',AJo:'C',ATo:'C',KJs:'C',KTs:'C',QTs:'C',T9s:'C',98s:'C' },
+  BTN_VS_EP: { AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AQs:'R',A5s:'R',A4s:'R',KQs:'R',AKo:'R',AQo:'R',
+    TT:'C',99:'C',AJs:'C',ATs:'C',KJs:'C',QJs:'C',JTs:'C' },
+  CO_VS_EP:  { AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AQs:'R',A5s:'R',A4s:'R',KQs:'R',AKo:'R',AQo:'R',
+    TT:'C',99:'C',AJs:'C',KJs:'C',QJs:'C' },
+  SB_VS_BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',AKs:'R',AQs:'R',AJs:'R',ATs:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',KQs:'R',QJs:'R',JTs:'R',AKo:'R',AQo:'R',AJo:'R',KQo:'R',
+    99:'C',88:'C',77:'C',KJs:'C',KTs:'C',QTs:'C',T9s:'C',98s:'C' },
+  SB_VS_CO:  { AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AQs:'R',AJs:'R',A5s:'R',A4s:'R',KQs:'R',AKo:'R',AQo:'R',
+    TT:'C',99:'C',ATs:'C',KJs:'C',QJs:'C' },
+  BB_VS_BTN: { AA:'R',KK:'R',QQ:'R',JJ:'R',TT:'R',AKs:'R',AQs:'R',AJs:'R',ATs:'R',A5s:'R',A4s:'R',A3s:'R',A2s:'R',KQs:'R',QJs:'R',JTs:'R',T9s:'R',AKo:'R',AQo:'R',AJo:'R',KQo:'R',
+    99:'C',88:'C',77:'C',66:'C',KJs:'C',KTs:'C',QTs:'C',98s:'C',87s:'C' },
+  BB_VS_CO:  { AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AQs:'R',AJs:'R',A5s:'R',A4s:'R',KQs:'R',AKo:'R',AQo:'R',
+    TT:'C',99:'C',ATs:'C',KJs:'C',QJs:'C' },
+  BB_VS_EP:  { AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AQs:'R',A5s:'R',KQs:'R',AKo:'R',AQo:'R',
+    TT:'C',99:'C',AJs:'C',KJs:'C' },
+  DEFAULT:   { AA:'R',KK:'R',QQ:'R',AKs:'R',AKo:'R' },
+}
+
+// 4betレンジ（vs 3bet）
+const FOURBET_RANGE: Record<string, string> = {
+  AA:'R',KK:'R',QQ:'R',JJ:'R',AKs:'R',AKo:'R',
+  // ブラフ4bet（ブロッカー価値）
+  A5s:'R',A4s:'R',A3s:'R',A2s:'R',
+  // コール
+  TT:'C',99:'C',AQs:'C',KQs:'C',AQo:'C',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ポストフロップ ユーティリティ
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
 
 const HAND_RANK_SCORE: Record<string, number> = {
-  'royal-flush':9,'straight-flush':8,'four-of-a-kind':7,
-  'full-house':6,'flush':5,'straight':4,
-  'three-of-a-kind':3,'two-pair':2,'one-pair':1,'high-card':0,
+  'royal-flush':9,'straight-flush':8,'four-of-a-kind':7,'full-house':6,
+  'flush':5,'straight':4,'three-of-a-kind':3,'two-pair':2,'one-pair':1,'high-card':0,
 }
 
-// メイドハンドの強度 (0-9)
 function madeHandStrength(player: Player, community: Card[]): number {
   const hole = player.holeCards
   if (!hole || hole.length < 2 || community.length === 0) return 0
   const c1 = hole[0]; const c2 = hole[1]
   if (!c1 || !c2) return 0
-  const result = evaluateHand([c1, c2], community)
-  return HAND_RANK_SCORE[result.rank] ?? 0
+  try {
+    const result = evaluateHand([c1, c2], community)
+    return HAND_RANK_SCORE[result.rank] ?? 0
+  } catch { return 0 }
 }
 
-// フラッシュドロー枚数（0-4）
 function flushDrawOuts(hole: Card[], community: Card[]): number {
   if (community.length === 0) return 0
   const all = [...hole, ...community]
   const suitCount: Record<string, number> = {}
   for (const c of all) suitCount[c.suit] = (suitCount[c.suit] ?? 0) + 1
   const max = Math.max(...Object.values(suitCount))
-  return max >= 4 ? max : 0
+  return max >= 4 ? 9 : 0
 }
 
-// ストレートドロー（OESDまたはgutshot）
 function straightDrawType(hole: Card[], community: Card[]): 'oesd' | 'gutshot' | 'none' {
   if (community.length === 0) return 'none'
-  const vals = [...hole, ...community]
-    .map(c => rankToValue(c.rank))
+  const all = [...hole, ...community]
+  const vals = all.map(c => rankToValue(c.rank))
     .filter((v, i, a) => a.indexOf(v) === i)
     .sort((a, b) => a - b)
-
-  // OESD: 連続4枚
   for (let i = 0; i <= vals.length - 4; i++) {
     const v = vals.slice(i, i + 4)
     if (v[3]! - v[0]! === 3) return 'oesd'
   }
-  // Gutshot: 4枚でスパン5
   for (let i = 0; i <= vals.length - 4; i++) {
     const v = vals.slice(i, i + 4)
     if (v[3]! - v[0]! === 4) return 'gutshot'
@@ -76,49 +159,36 @@ function straightDrawType(hole: Card[], community: Card[]): 'oesd' | 'gutshot' |
   return 'none'
 }
 
-// ドロー込みの実効強度 (0.0 - 1.0)
 function effectiveStrength(player: Player, community: Card[]): number {
   const hole = player.holeCards
   if (!hole || hole.length < 2) return 0
   const c1 = hole[0]; const c2 = hole[1]
   if (!c1 || !c2) return 0
-
-  const made = madeHandStrength(player, community) / 9  // 0-1
-
+  const made = madeHandStrength(player, community) / 9
   if (community.length === 0) return made
-
   const fdOuts = flushDrawOuts([c1, c2], community)
   const sdType = straightDrawType([c1, c2], community)
-
-  // ドローのエクイティ追加（近似）
   const remaining = 52 - 2 - community.length
   let drawEquity = 0
-  if (fdOuts >= 4) drawEquity += 9 / remaining          // フラドロ ~9 outs
-  if (sdType === 'oesd') drawEquity += 8 / remaining    // OESD ~8 outs
-  if (sdType === 'gutshot') drawEquity += 4 / remaining // gutshot ~4 outs
-
+  if (fdOuts >= 4) drawEquity += 9 / remaining
+  if (sdType === 'oesd') drawEquity += 8 / remaining
+  if (sdType === 'gutshot') drawEquity += 4 / remaining
   return Math.min(1.0, made + drawEquity * 0.8)
 }
 
-// IP判定: ディーラーボタンに近いほどIP
 function isInPosition(player: Player, state: GameState): boolean {
   const n = state.players.length
   const myIdx = state.players.findIndex(p => p.id === player.id)
   if (myIdx === -1) return false
-  const dealerIdx = state.dealerIndex
-  // ポストフロップでの行動順: SBが最初、BTNが最後
-  // BTN(dealer)からの距離が小さいほどIP
-  const distFromDealer = (myIdx - dealerIdx + n) % n
-  // 他のアクティブプレイヤーの中で最も大きいdistanceを持つ=IP
   const activePlayers = state.players.filter(p => !p.isFolded && !p.isAllIn)
   const maxDist = Math.max(...activePlayers.map(p => {
     const idx = state.players.findIndex(x => x.id === p.id)
-    return (idx - dealerIdx + n) % n
+    return (idx - state.dealerIndex + n) % n
   }))
+  const distFromDealer = (myIdx - state.dealerIndex + n) % n
   return distFromDealer === maxDist
 }
 
-// プリフロップアグレッサー判定
 function isPreflopAggressor(player: Player, state: GameState): boolean {
   const raises = state.actionHistory.filter(
     a => a.action === 'raise' || a.action === 'all-in'
@@ -127,22 +197,22 @@ function isPreflopAggressor(player: Player, state: GameState): boolean {
   return raises[raises.length - 1]?.playerId === player.id
 }
 
-// ポットオッズ計算 (必要勝率)
 function requiredEquity(toCall: number, potSize: number): number {
   if (toCall <= 0) return 0
   return toCall / (potSize + toCall)
 }
 
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
 // プリフロップ ユーティリティ
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getPosition(playerIndex: number, dealerIndex: number, n: number): string {
   const rel = (playerIndex - dealerIndex + n) % n
   if (n === 2) return rel === 0 ? 'BTN' : 'BB'
-  if (n === 3) return (['BTN','SB','BB'][rel]) ?? 'BTN'
-  if (n === 4) return (['BTN','SB','BB','UTG'][rel]) ?? 'BTN'
-  if (n === 5) return (['BTN','SB','BB','UTG','HJ'][rel]) ?? 'BTN'
-  return (['BTN','SB','BB','UTG','HJ','CO'][rel % 6]) ?? 'BTN'
+  if (n === 3) return (['BTN','SB','BB'] as string[])[rel] ?? 'BTN'
+  if (n === 4) return (['BTN','SB','BB','UTG'] as string[])[rel] ?? 'BTN'
+  if (n === 5) return (['BTN','SB','BB','UTG','HJ'] as string[])[rel] ?? 'BTN'
+  return (['BTN','SB','BB','UTG','HJ','CO'] as string[])[rel % 6] ?? 'BTN'
 }
 
 function handToKey(player: Player): string | null {
@@ -151,9 +221,10 @@ function handToKey(player: Player): string | null {
   const c1 = cards[0]; const c2 = cards[1]
   if (!c1 || !c2) return null
   const v1 = rankToValue(c1.rank); const v2 = rankToValue(c2.rank)
-  const high = v1 >= v2 ? c1 : c2; const low = v1 >= v2 ? c2 : c1
-  if (high.rank === low.rank) return `${high.rank}${high.rank}`
-  return high.suit === low.suit ? `${high.rank}${low.rank}s` : `${high.rank}${low.rank}o`
+  const hi = v1 >= v2 ? c1 : c2; const lo = v1 >= v2 ? c2 : c1
+  const suited = hi.rank === lo.rank ? '' : (hi.suit === lo.suit ? 's' : 'o')
+  if (hi.rank === lo.rank) return `${hi.rank}${lo.rank}`
+  return `${hi.rank}${lo.rank}${suited}`
 }
 
 function countPreflopRaises(state: GameState): number {
@@ -170,21 +241,55 @@ function getRaiserPosition(state: GameState): string {
   return getPosition(idx, state.dealerIndex, state.players.length)
 }
 
-function getResponseRange(myPos: string, raiserPos: string): Record<string, string> {
-  if (myPos === 'BB') {
-    if (raiserPos === 'BTN' || raiserPos === 'SB') return BB_VS_BTN
-    if (raiserPos === 'CO') return BB_VS_CO
-    return BB_VS_EP
+function get3betRange(myPos: string, raiserPos: string): Record<string, string> {
+  const key = `${myPos}_VS_${raiserPos}`
+  if (key in THREBET_RANGES) return THREBET_RANGES[key]!
+  // EP同士、HJ vs UTG等はDEFAULT
+  const epPositions = ['UTG', 'HJ']
+  if (epPositions.includes(raiserPos)) {
+    return THREBET_RANGES[`${myPos}_VS_EP`] ?? THREBET_RANGES['DEFAULT']!
   }
-  if (myPos === 'SB') return SB_VS_BTN
-  if (myPos === 'BTN') return raiserPos === 'CO' ? BTN_VS_CO : BTN_VS_EP
-  return CO_VS_EP
+  return THREBET_RANGES['DEFAULT']!
 }
 
-function resolveSignal(signal: string, difficulty: AiDifficulty): string {
-  if (signal !== 'M') return signal
-  if (difficulty === 'easy') return 'F'
-  return Math.random() < (difficulty === 'hard' ? 0.6 : 0.4) ? 'R' : 'F'
+// ポジション別の適切なopenraiseサイズ（BB単位）
+function getOpenRaiseSize(myPos: string, bbSize: number, stackDepth: number): number {
+  // スタックが浅い場合は小さく
+  const spFactor = stackDepth < 20 ? 0.8 : 1.0
+  const sizes: Record<string, number> = {
+    UTG: 2.5, HJ: 2.5, CO: 2.5, BTN: 2.2, SB: 3.0, BB: 3.0,
+  }
+  const mult = (sizes[myPos] ?? 2.5) * spFactor
+  return Math.round(bbSize * mult)
+}
+
+// 3betサイズ（IPは小さく、OOPは大きく）
+function get3betSize(myPos: string, raiseAmount: number, potSize: number, bbSize: number): number {
+  const ipPositions = ['BTN', 'CO']
+  const isIP = ipPositions.includes(myPos)
+  // IP: 約2.5〜3x、OOP: 約3〜4x
+  const mult = isIP ? 2.8 : 3.5
+  return Math.round(Math.max(raiseAmount * mult, potSize * 0.75 + bbSize * 2))
+}
+
+// 4betサイズ
+function get4betSize(raise3bet: number, potSize: number): number {
+  return Math.round(Math.max(raise3bet * 2.2, potSize * 0.45))
+}
+
+// difficultyによるミス率（レンジ外アクション頻度）
+function applyDifficulty(signal: string, difficulty: AiDifficulty): string {
+  if (difficulty === 'easy') {
+    // easyはミスが多い：Rを20%の確率でF、Cを30%の確率でF
+    if (signal === 'R' && Math.random() < 0.20) return 'F'
+    if (signal === 'C' && Math.random() < 0.30) return 'F'
+  } else if (difficulty === 'medium') {
+    // mediumは少しミス：Rを8%でF、Cを12%でF
+    if (signal === 'R' && Math.random() < 0.08) return 'F'
+    if (signal === 'C' && Math.random() < 0.12) return 'F'
+  }
+  // hard: ミスなし（ほぼGTO通り）
+  return signal
 }
 
 function preflopAction(
@@ -194,120 +299,194 @@ function preflopAction(
   if (playerIndex === -1) return null
   const key = handToKey(player)
   if (!key) return null
+
   const raiseCount = countPreflopRaises(state)
-  const toCall = state.currentBet - player.currentBet
+  const toCall = Math.max(0, state.currentBet - player.currentBet)
   const canCheck = toCall === 0
   const myPos = getPosition(playerIndex, state.dealerIndex, state.players.length)
+  const potSize = state.pots.reduce((s, p) => s + p.amount, 0)
+  const bbSize = state.bigBlind
+  const stackDepth = player.chips / bbSize  // BB単位のスタック深さ
+  const raiserPos = getRaiserPosition(state)
 
-  let rangeMap: Record<string, string>
+  // ── オープン（誰もレイズしていない）──────────────────────────
   if (raiseCount === 0) {
-    rangeMap = OPEN_RANGES[myPos] ?? {}
-  } else if (raiseCount === 1) {
-    rangeMap = getResponseRange(myPos, getRaiserPosition(state))
-  } else {
-    rangeMap = VS_3BET
-  }
-
-  const signal = rangeMap[key] ?? 'F'
-  const resolved = resolveSignal(signal, difficulty)
-
-  if (resolved === 'R') {
-    const mult = raiseCount === 0 ? 2.5 : 3
-    const raiseAmount = Math.round(state.currentBet * mult + state.minRaise)
-    if (player.chips >= raiseAmount - player.currentBet) return { action: 'raise', amount: raiseAmount }
-    return { action: 'all-in' }
-  }
-  if (resolved === 'C') {
+    const rangeMap = OPEN_RANGES[myPos] ?? {}
+    const signal = rangeMap[key] ?? 'F'
+    const resolved = applyDifficulty(signal, difficulty)
+    if (resolved === 'R') {
+      const raiseAmount = getOpenRaiseSize(myPos, bbSize, stackDepth)
+      const totalBet = state.currentBet + raiseAmount
+      if (player.chips >= totalBet - player.currentBet) {
+        return { action: 'raise', amount: totalBet }
+      }
+      return { action: 'all-in' }
+    }
     if (canCheck) return { action: 'check' }
-    if (player.chips >= toCall) return { action: 'call' }
-    return { action: 'all-in' }
+    // BB以外はFoldのみ（limperはなし）
+    if (myPos !== 'BB') return { action: 'fold' }
+    // BBはBBを払っているので check か fold
+    return { action: 'check' }
   }
+
+  // ── 3bet（1回レイズ済み）────────────────────────────────────
+  if (raiseCount === 1) {
+    const threeRange = get3betRange(myPos, raiserPos)
+    const signal = threeRange[key] ?? 'F'
+
+    // BBのコールレンジ追加
+    let callRange: Record<string, boolean> = {}
+    if (myPos === 'BB') {
+      callRange = raiserPos === 'BTN' ? BB_CALL_VS_BTN : BB_CALL_VS_OTHER
+    } else if (myPos === 'SB' && raiserPos === 'BTN') {
+      callRange = SB_CALL_VS_BTN
+    }
+    const canCallFromRange = callRange[key] ?? false
+
+    const resolved = applyDifficulty(signal, difficulty)
+
+    if (resolved === 'R') {
+      const betSize = get3betSize(myPos, state.currentBet, potSize, bbSize)
+      if (player.chips >= betSize - player.currentBet) {
+        return { action: 'raise', amount: betSize }
+      }
+      return { action: 'all-in' }
+    }
+    if (resolved === 'C' || canCallFromRange) {
+      if (player.chips >= toCall) return { action: 'call' }
+      return { action: 'all-in' }
+    }
+    if (canCheck) return { action: 'check' }
+    return { action: 'fold' }
+  }
+
+  // ── 4bet（2回レイズ済み）────────────────────────────────────
+  if (raiseCount === 2) {
+    const signal = FOURBET_RANGE[key] ?? 'F'
+    const resolved = applyDifficulty(signal, difficulty)
+
+    if (resolved === 'R') {
+      const betSize = get4betSize(state.currentBet, potSize)
+      // スタック < 4betサイズならオールイン
+      if (player.chips <= betSize - player.currentBet || stackDepth < 25) {
+        return { action: 'all-in' }
+      }
+      return { action: 'raise', amount: betSize }
+    }
+    if (resolved === 'C') {
+      // スタックが浅い（<25BB）場合はコールよりオールイン推奨
+      if (stackDepth < 25) return { action: 'all-in' }
+      if (player.chips >= toCall) return { action: 'call' }
+      return { action: 'all-in' }
+    }
+    if (canCheck) return { action: 'check' }
+    return { action: 'fold' }
+  }
+
+  // ── 5bet以降（オールインスポット）─────────────────────────────
+  const premiumKeys = ['AA','KK','QQ','AKs','AKo']
+  if (premiumKeys.includes(key)) return { action: 'all-in' }
+  // スタックが浅ければコール
+  if (stackDepth < 15 && toCall <= player.chips) return { action: 'call' }
   if (canCheck) return { action: 'check' }
   return { action: 'fold' }
 }
 
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
 // ポストフロップ メイン
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+
 function postflopAction(
   state: GameState, player: Player, difficulty: AiDifficulty
 ): { action: ActionType; amount?: number } {
-  const toCall   = state.currentBet - player.currentBet
+  const toCall   = Math.max(0, state.currentBet - player.currentBet)
   const canCheck = toCall === 0
   const potSize  = state.pots.reduce((s, p) => s + p.amount, 0)
   const community = state.communityCards
   const street   = state.phase // 'flop' | 'turn' | 'river'
 
-  const eq = effectiveStrength(player, community)  // 0.0-1.0
-  const ip  = isInPosition(player, state)
+  const eq       = effectiveStrength(player, community)
+  const ip       = isInPosition(player, state)
   const aggressor = isPreflopAggressor(player, state)
 
-  // ── ポットオッズ判定 ──────────────────────────────────────
-  if (!canCheck) {
-    const needed = requiredEquity(toCall, potSize)
-    // エクイティがポットオッズを大幅に下回る場合はフォールド
-    if (eq < needed * 0.7) return { action: 'fold' }
-    // エクイティがポットオッズを満たせばコール
-    if (eq < needed * 1.3) return { action: 'call' }
-  }
-
-  // ── ベット/レイズ判断 ─────────────────────────────────────
   // difficulty別アグレッション係数
   const aggMult = { easy: 0.7, medium: 1.0, hard: 1.25 }[difficulty]
 
-  // C-bet: プリフロップアグレッサーがフロップでベット
-  const isCbet = aggressor && street === 'flop' && canCheck
-  const cbetFreq = ip ? 0.70 * aggMult : 0.50 * aggMult
+  // ── チェック判断 ────────────────────────────────────────────
+  if (canCheck) {
+    // Cbet: プリフロップアグレッサーがフロップでベット
+    const isCbet = aggressor && street === 'flop' && canCheck
+    const cbetFreq = ip ? 0.70 * aggMult : 0.50 * aggMult
 
-  // ベット判断の閾値
-  const betThreshold = ip
-    ? 0.35 * aggMult   // IPは積極的にベット
-    : 0.45 * aggMult   // OOPはやや慎重
+    // ベット/チェック閾値（IP有利）
+    const betThreshold = ip ? 0.30 * aggMult : 0.40 * aggMult
+    const shouldBet = isCbet
+      ? (eq > 0.20 && Math.random() < cbetFreq)
+      : (eq > betThreshold)
 
-  const shouldBet = isCbet
-    ? (eq > 0.25 && Math.random() < cbetFreq)
-    : (eq > betThreshold)
+    // ブラフ（低エクイティでもたまにベット）
+    const bluffFreq = ip
+      ? (difficulty === 'hard' ? 0.14 : difficulty === 'medium' ? 0.08 : 0.03)
+      : (difficulty === 'hard' ? 0.08 : difficulty === 'medium' ? 0.04 : 0.01)
+    const bluff = Math.random() < bluffFreq && eq < 0.25
 
-  // ブラフ（低エクイティでもたまにベット）
-  const bluffFreq = ip
-    ? (difficulty === 'hard' ? 0.12 : difficulty === 'medium' ? 0.07 : 0.03)
-    : (difficulty === 'hard' ? 0.07 : difficulty === 'medium' ? 0.04 : 0.01)
-  const bluff = Math.random() < bluffFreq && eq < 0.25
+    if (shouldBet || bluff) {
+      // ベットサイズ: エクイティと状況に応じて変動
+      const potFrac = eq > 0.7
+        ? (0.65 + Math.random() * 0.35)   // ナッツ: 65-100% pot
+        : eq > 0.45
+        ? (0.45 + Math.random() * 0.25)   // 中強度: 45-70% pot
+        : (0.25 + Math.random() * 0.20)   // ブラフ/弱: 25-45% pot
 
-  if (shouldBet || bluff) {
-    // ベットサイズ: エクイティに応じて変動
-    const potFrac = eq > 0.7
-      ? (0.7 + Math.random() * 0.3)   // ナッツ: 70-100% pot
-      : eq > 0.45
-        ? (0.45 + Math.random() * 0.25)  // 中強度: 45-70% pot
-        : (0.25 + Math.random() * 0.2)   // ブラフ/弱: 25-45% pot
-
-    if (canCheck) {
-      const betAmount = Math.max(Math.round(potSize * potFrac), state.minRaise)
+      // ストリートによりサイズ調整（ターン/リバーは大きく）
+      const streetMult = street === 'flop' ? 1.0 : street === 'turn' ? 1.15 : 1.3
+      const betAmount = Math.max(
+        Math.round(potSize * potFrac * streetMult),
+        state.minRaise
+      )
       if (player.chips >= betAmount) return { action: 'raise', amount: state.currentBet + betAmount }
       return { action: 'all-in' }
-    } else {
-      // レイズ: 強いハンドのみ
-      if (eq > 0.65) {
-        const raiseAmount = Math.round(state.currentBet * 2.5 + potSize * 0.3)
-        if (player.chips >= raiseAmount - player.currentBet) return { action: 'raise', amount: raiseAmount }
-        return { action: 'all-in' }
-      }
-      return { action: 'call' }
     }
+    return { action: 'check' }
   }
 
-  // ── チェック/コール/フォールド ────────────────────────────
-  if (canCheck) return { action: 'check' }
-
-  // ポットオッズがギリギリ合う場合はコール
+  // ── コール/レイズ/フォールド判断 ───────────────────────────
   const needed = requiredEquity(toCall, potSize)
-  if (eq >= needed) return { action: 'call' }
+
+  // エクイティがポットオッズを大幅に下回る場合フォールド
+  if (eq < needed * 0.75) return { action: 'fold' }
+
+  // レイズ/レイズ判断
+  const raiseThreshold = ip ? 0.55 * aggMult : 0.65 * aggMult
+  const bluffRaiseFreq = difficulty === 'hard' ? 0.10 : difficulty === 'medium' ? 0.05 : 0.02
+
+  if (eq > raiseThreshold || (Math.random() < bluffRaiseFreq && eq < 0.25)) {
+    const potFrac = eq > 0.70
+      ? (0.65 + Math.random() * 0.35)
+      : eq > 0.45
+      ? (0.45 + Math.random() * 0.25)
+      : (0.30 + Math.random() * 0.20)
+    const streetMult = street === 'flop' ? 1.0 : street === 'turn' ? 1.15 : 1.3
+    const raiseAmount = Math.round(state.currentBet * 2.5 + potSize * potFrac * streetMult)
+    if (player.chips >= raiseAmount - player.currentBet) {
+      return { action: 'raise', amount: raiseAmount }
+    }
+    return { action: 'all-in' }
+  }
+
+  // コール（ポットオッズが合う場合）
+  if (eq >= needed) {
+    if (player.chips >= toCall) return { action: 'call' }
+    return { action: 'all-in' }
+  }
 
   return { action: 'fold' }
 }
 
-// ══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// エントリポイント
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function decideAction(
   state: GameState,
   player: Player,
