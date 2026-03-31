@@ -1,5 +1,6 @@
 import type { ActionType, Card, Player } from '@/game/types'
 import { CardView } from './CardView'
+import { PokerChip } from '@/components/ui/PokerChip'
 
 interface Props {
   player: Player
@@ -7,6 +8,8 @@ interface Props {
   size?: 'sm' | 'md'
   lastAction?: ActionType | null
 }
+
+const BET_ACTIONS = new Set<string>(['raise', 'call', 'all-in', 'sb', 'bb'])
 
 export function PlayerSeat({ player, isDealer, size = 'md', lastAction }: Props) {
   const cards = player.holeCards as Card[]
@@ -16,6 +19,10 @@ export function PlayerSeat({ player, isDealer, size = 'md', lastAction }: Props)
     : ''
   const dimmed = player.isFolded ? 'opacity-40' : ''
   const cardSize = size === 'sm' ? 'sm' : 'md'
+
+  const showChip = player.currentBet > 0 && !player.isFolded &&
+    (lastAction == null || BET_ACTIONS.has(lastAction as string))
+  const chipSize = size === 'sm' ? 22 : 28
 
   return (
     <div className={`flex flex-col items-center gap-1 ${dimmed}`}>
@@ -32,6 +39,14 @@ export function PlayerSeat({ player, isDealer, size = 'md', lastAction }: Props)
               </>
             )}
       </div>
+
+      {/* Bet chip — shown between cards and name plate (table side) */}
+      {showChip && (
+        <div className="flex items-center gap-1">
+          <PokerChip amount={player.currentBet} size={chipSize} />
+          <span className="text-[10px] text-yellow-300 font-mono">{player.currentBet}</span>
+        </div>
+      )}
 
       {/* Name plate */}
       <div
@@ -53,11 +68,7 @@ export function PlayerSeat({ player, isDealer, size = 'md', lastAction }: Props)
           )}
         </div>
         <div className="text-[11px] text-white/60 mt-0.5">{player.chips.toLocaleString()} ¢</div>
-        {player.currentBet > 0 && !player.isFolded && (
-          <div className="text-[10px] text-yellow-400 font-mono">
-            {lastAction === 'call' ? 'CALL' : 'BET'} {player.currentBet}
-          </div>
-        )}
+
         {player.isFolded && (
           <div className="text-[10px] text-red-400 font-semibold">FOLD</div>
         )}
