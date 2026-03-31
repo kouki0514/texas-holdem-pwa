@@ -140,6 +140,11 @@ function TimelineCard({ entry }: { entry: ReasoningEntry }) {
             {entry.phase}
           </span>
         )}
+        {entry.pot > 0 && (
+          <span className="text-[10px] text-white/40 font-mono">
+            Pot: {entry.pot}
+          </span>
+        )}
         {entry.holeCards.length > 0 && (
           <div className="flex gap-1 ml-1">
             {entry.holeCards.map((c, i) => <CardChip key={i} card={c} size="sm" />)}

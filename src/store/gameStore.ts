@@ -32,6 +32,7 @@ export interface ReasoningEntry {
   timestamp: number
   phase: string
   position: string | null
+  pot: number
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -394,6 +395,7 @@ export function buildReasoningEntry(
     holeCards: player.holeCards.map((c) => ({ ...c })),
     phase: state.phase,
     position: calcPosition(idx, state.players.length, state.dealerIndex),
+    pot: state.pots.reduce((s, p) => s + p.amount, 0),
   }
 }
 
