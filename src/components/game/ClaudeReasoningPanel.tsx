@@ -8,6 +8,55 @@ const ACTION_STYLE: { [key: string]: string } = {
   call:    'bg-blue-900/60  text-blue-300  border-blue-700',
   raise:   'bg-yellow-900/60 text-yellow-300 border-yellow-700',
   'all-in':'bg-purple-900/60 text-purple-300 border-purple-700',
+  sb:      'bg-gray-700/60  text-gray-200  border-gray-400',
+  bb:      'bg-blue-900/60  text-blue-200  border-blue-600',
+}
+
+// チップ色設定: amount に応じて色を決定
+function chipColors(amount: number): { fill: string; stroke: string; text: string; dashes: string } {
+  if (amount <= 10)  return { fill: '#e5e7eb', stroke: '#9ca3af', text: '#374151', dashes: '#9ca3af' } // 白
+  if (amount <= 20)  return { fill: '#3b82f6', stroke: '#1d4ed8', text: '#ffffff', dashes: '#93c5fd' } // 青
+  if (amount <= 100) return { fill: '#ef4444', stroke: '#b91c1c', text: '#ffffff', dashes: '#fca5a5' } // 赤
+  if (amount <= 500) return { fill: '#22c55e', stroke: '#15803d', text: '#ffffff', dashes: '#86efac' } // 緑
+  return { fill: '#1f2937', stroke: '#d97706', text: '#fbbf24', dashes: '#d97706' }                   // 黒(金縁)
+}
+
+function PokerChip({ amount }: { amount: number }) {
+  const c = chipColors(amount)
+  const label = amount >= 1000 ? `${(amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1)}k` : String(amount)
+  // 8つのダッシュを円周に配置
+  const dashes = Array.from({ length: 8 }, (_, i) => {
+    const angle = (i * 45 * Math.PI) / 180
+    const r1 = 8, r2 = 10
+    const x1 = 12 + r1 * Math.cos(angle)
+    const y1 = 12 + r1 * Math.sin(angle)
+    const x2 = 12 + r2 * Math.cos(angle)
+    const y2 = 12 + r2 * Math.sin(angle)
+    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={c.dashes} strokeWidth="2" strokeLinecap="round" />
+  })
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" className="inline-block shrink-0" aria-hidden>
+      {/* 外縁 */}
+      <circle cx="12" cy="12" r="11" fill={c.stroke} />
+      {/* 本体 */}
+      <circle cx="12" cy="12" r="10" fill={c.fill} />
+      {/* ダッシュ模様 */}
+      {dashes}
+      {/* 内円 */}
+      <circle cx="12" cy="12" r="7" fill={c.fill} stroke={c.stroke} strokeWidth="1" />
+      {/* 額面テキスト */}
+      <text
+        x="12" y="12"
+        textAnchor="middle" dominantBaseline="central"
+        fontSize={label.length >= 3 ? '4' : '5'}
+        fontWeight="bold"
+        fill={c.text}
+        fontFamily="monospace"
+      >
+        {label}
+      </text>
+    </svg>
+  )
 }
 
 const SUIT_SYMBOL: { [key: string]: string } = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }
@@ -133,10 +182,14 @@ function TimelineCard({ entry, isHuman }: { entry: ReasoningEntry; isHuman: bool
     ? 'rounded-lg border border-green-700/30 bg-green-900/10 p-2.5'
     : 'rounded-lg border border-white/10 bg-black/30 p-2.5 space-y-1.5'
   const nameCls = isHuman ? 'text-sm font-semibold text-green-300' : 'text-sm font-semibold text-white'
+  const showChip = entry.amount != null && entry.amount > 0 &&
+    (entry.action === 'raise' || entry.action === 'all-in' || entry.action === 'call' ||
+     (entry.action as string) === 'sb' || (entry.action as string) === 'bb')
   return (
     <div className={containerCls}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className={nameCls}>{entry.playerName}</span>
+        {showChip && <PokerChip amount={entry.amount!} />}
         <span className={`rounded-md border px-2 py-0.5 text-xs font-mono uppercase tracking-wide ${badgeStyle}`}>
           {entry.action}{amtLabel}
         </span>
