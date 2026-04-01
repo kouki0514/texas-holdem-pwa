@@ -623,16 +623,34 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
 
   // ── Position-based strategy note ────────────────────────────────────────────
   const posLower = position.toLowerCase()
-  const isIP = posLower.includes('btn') || posLower.includes('co')
+
+  // Postflop IP/OOP: determined by who acts LAST among active players.
+  // Action order postflop: SB(pos=1) → BB(pos=2) → MP... → CO(pos=n-1) → BTN(pos=0) acts last.
+  // Convert pos values to a postflop action order (higher = later = IP):
+  //   pos=0 (BTN) → order n-1 (last)
+  //   pos=k (k>0) → order k-1
+  const n = state.players.length
+  function postflopOrder(p: Player): number {
+    const pos = (state.players.indexOf(p) - state.dealerIndex + n) % n
+    return pos === 0 ? n - 1 : pos - 1
+  }
+  const activePlayers2 = state.players.filter((p) => !p.isFolded && !p.isAllIn)
+  const myOrder = postflopOrder(player)
+  const isIP = activePlayers2.every((p) => postflopOrder(p) <= myOrder)
+
   let posStrategy: string
   if (posLower.includes('btn')) {
     posStrategy = 'BTN: widest open-raise range (~45-50% hands), steal often, apply max pressure post-flop IP'
   } else if (posLower.includes('co')) {
     posStrategy = 'CO: open ~30% hands, 3-bet squeeze BTN/SB, play aggressively IP'
   } else if (posLower.includes('sb')) {
-    posStrategy = 'SB: defend wide vs BTN steal (call/3-bet), but OOP post-flop — prefer 3-bet over call to deny equity'
+    posStrategy = isIP
+      ? 'SB (IP vs BB HU): acts last post-flop — apply pressure, bet wide for value and bluffs'
+      : 'SB: OOP post-flop — prefer 3-bet over call to deny equity; use check-raise, avoid donk-betting'
   } else if (posLower.includes('bb')) {
-    posStrategy = 'BB: getting best price, defend wide (pot odds), check-raise as primary weapon OOP'
+    posStrategy = isIP
+      ? 'BB (IP vs SB HU): acts last post-flop — apply pressure, bet wide for value and bluffs'
+      : 'BB: getting best price, defend wide (pot odds), check-raise as primary weapon OOP'
   } else {
     posStrategy = 'EP/MP: tight range, raise for value/protection, fold to 3-bets without premiums'
   }
