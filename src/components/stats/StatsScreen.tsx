@@ -80,6 +80,7 @@ export function StatsScreen({ onClose }: Props) {
   const [hands, setHands] = useState<HandRecord[]>([])
   const [loading, setLoading] = useState(true)
   const sessionStats = useGameStore((s) => s.sessionStats)
+  const bigBlind     = useGameStore((s) => s.bigBlind)
 
   useEffect(() => {
     loadAllHands().then((h) => { setHands(h); setLoading(false) }).catch(() => setLoading(false))
@@ -97,7 +98,7 @@ export function StatsScreen({ onClose }: Props) {
   const vpipCount  = hands.filter((h) => h.vpip).length
   const pfrCount   = hands.filter((h) => h.pfr).length
   const totalNet   = hands.reduce((s, h) => s + h.netChips, 0)
-  const bigBlind   = 20  // default big blind; used for win rate calc
+  const bb         = bigBlind > 0 ? bigBlind : 20
 
   let peak = 0, maxDd = 0, cum = 0
   for (const h of hands) {
@@ -108,7 +109,6 @@ export function StatsScreen({ onClose }: Props) {
   }
 
   const pct = (n: number, d: number) => d > 0 ? `${((n / d) * 100).toFixed(1)}%` : '—'
-  const num = (n: number, d: number) => d > 0 ? ((n / d) * 100).toFixed(1) : null
 
   // ── 10 advanced metrics from sessionStats ────────────────────────────────
   const ss = sessionStats
@@ -157,13 +157,13 @@ export function StatsScreen({ onClose }: Props) {
     ? (netFromSS >= 0 ? 'text-green-400' : 'text-red-400')
     : undefined
 
-  // ⑩WinRate (BB/100)
-  const winRateVal  = (() => {
-    const v = num(totalNet / bigBlind * 100, handsPlayed)
-    if (v === null) return '—'
-    const n = parseFloat(v)
-    return `${n >= 0 ? '+' : ''}${n.toFixed(1)}`
-  })()
+  // ⑩WinRate (BB/100): (累積損益 / BB額) / 総ハンド数 * 100
+  const winRateVal  = handsPlayed > 0
+    ? (() => {
+        const n = (totalNet / bb / handsPlayed) * 100
+        return `${n >= 0 ? '+' : ''}${n.toFixed(1)}`
+      })()
+    : '—'
   const winRateColor = totalNet >= 0 ? 'text-green-400' : 'text-red-400'
 
   const advancedMetrics: StatCardProps[] = [
