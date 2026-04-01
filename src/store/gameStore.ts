@@ -316,11 +316,18 @@ export const useGameStore = create<GameStore>()(
             }
           })
           .catch((err) => {
-            // Fallback to rule-based AI on error
-            console.warn('[Claude] API error, falling back to rule-based AI:', err)
-            set((s) => { s.claudeThinking = false })
+            console.warn('[Claude] error, falling back to rule-based AI:', err)
             const fallback = decideAction(state, player, state.aiDifficulty)
-            get().playerAction(fallback.action, fallback.amount)
+            const fallbackEntry: ReasoningEntry = buildReasoningEntry(state, player, fallback.action, fallback.amount, '(rule-based)')
+            set((s) => {
+              s.claudeThinking = false
+              s.latestReasoning[player.id] = fallbackEntry
+              s.reasoningLog.push(fallbackEntry)
+            })
+            const current = get()
+            if (current.phase !== 'showdown' && current.phase !== 'ended' && current.phase !== 'waiting') {
+              get().playerAction(fallback.action, fallback.amount)
+            }
           })
       } else {
         // ── Rule-based path (sync) ─────────────────────────────────────────

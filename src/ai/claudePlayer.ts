@@ -628,6 +628,8 @@ function getClient(): Anthropic {
  * On any API or parsing error the function throws — callers should catch and
  * fall back to the rule-based AI.
  */
+const CLAUDE_TIMEOUT_MS = 15_000
+
 export async function claudeDecideAction(
   state: GameState,
   player: Player,
@@ -635,31 +637,38 @@ export async function claudeDecideAction(
   const client = getClient()
   const systemPrompt = buildSystemPrompt(state, player)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const response = await (client.messages.create as any)({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
-    system: [
-      {
-        type: 'text',
-        text: systemPrompt,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [
-      {
-        role: 'user',
-        content: 'アクションを選んでください。',
-      },
-    ],
-  })
+  const apiCall = (async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (client.messages.create as any)({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [
+        {
+          role: 'user',
+          content: 'アクションを選んでください。',
+        },
+      ],
+    })
 
-  // Extract text content
-  const textBlock = (response.content as Array<{type: string; text?: string}>).find((b) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text content in Claude response')
-  }
+    // Extract text content
+    const textBlock = (response.content as Array<{type: string; text?: string}>).find((b) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text content in Claude response')
+    }
 
-  const raw = extractJson(textBlock.text!)
-  return sanitise(raw, state, player)
+    return sanitise(extractJson(textBlock.text!), state, player)
+  })()
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Claude timeout after ${CLAUDE_TIMEOUT_MS}ms`)), CLAUDE_TIMEOUT_MS)
+  )
+
+  return Promise.race([apiCall, timeout])
 }
