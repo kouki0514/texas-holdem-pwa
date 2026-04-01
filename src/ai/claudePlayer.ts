@@ -150,19 +150,44 @@ function classifyMadeHand(holeCards: [Card, Card], communityCards: Card[]): stri
   }
 
   // Tier 2: Two pair or three of a kind
+  // Only count as Tier2 if at least one hole card contributes (avoids board-only two-pair/trips)
   if (rank === 'two-pair' || rank === 'three-of-a-kind') {
-    const label = rank === 'two-pair' ? 'ツーペア' : 'スリーカード'
-    return `${label} — Tier2 Strong (bet/raise for value and protection)`
+    const holeRankVals = holeCards.map((c) => rankToValue(c.rank))
+    const boardRankCounts: Record<number, number> = {}
+    for (const c of communityCards) {
+      const v = rankToValue(c.rank)
+      boardRankCounts[v] = (boardRankCounts[v] ?? 0) + 1
+    }
+    // Board-only two-pair: board has 2 different pairs and hole cards match neither
+    // Board-only trips: board has 3-of-a-kind and hole cards match none
+    const holeMatchesBoard = holeRankVals.some((v) => (boardRankCounts[v] ?? 0) >= 1)
+    if (!holeMatchesBoard) {
+      // Fall through to High Card / Tier 5 classification below
+    } else {
+      const label = rank === 'two-pair' ? 'ツーペア' : 'スリーカード'
+      return `${label} — Tier2 Strong (bet/raise for value and protection)`
+    }
   }
 
   // Tier 3 / Tier 4: One pair — distinguish top pair vs under pair
   if (rank === 'one-pair') {
     const pairRankValue = kickers[0] // score[1] = pair rank value
-    const boardHighValue = Math.max(...communityCards.map((c) => rankToValue(c.rank)))
-    if (pairRankValue >= boardHighValue) {
-      return `ワンペア(トップペア以上) — Tier3 Decent (bet for value/protection, call reasonable bets)`
+
+    // Check if either hole card contributes to the pair.
+    // If the pair rank matches a board pair but neither hole card has that rank,
+    // the pair is entirely on the board — treat as High Card (no improvement).
+    const holeRankVals = holeCards.map((c) => rankToValue(c.rank))
+    const holeContributesToPair = holeRankVals.some((v) => v === pairRankValue)
+
+    if (!holeContributesToPair) {
+      // Fall through to High Card / Tier 5 classification below
+    } else {
+      const boardHighValue = Math.max(...communityCards.map((c) => rankToValue(c.rank)))
+      if (pairRankValue >= boardHighValue) {
+        return `ワンペア(トップペア以上) — Tier3 Decent (bet for value/protection, call reasonable bets)`
+      }
+      return `ワンペア(ミドル/ボトムペア) — Tier4 Marginal (check/call small bets, fold to heavy pressure)`
     }
-    return `ワンペア(ミドル/ボトムペア) — Tier4 Marginal (check/call small bets, fold to heavy pressure)`
   }
 
   // Tier 5: High card — sub-classify by draw potential
@@ -598,6 +623,7 @@ function buildSystemPrompt(state: GameState, player: Player): string {
 
   // ── Position-based strategy note ────────────────────────────────────────────
   const posLower = position.toLowerCase()
+  const isIP = posLower.includes('btn') || posLower.includes('co')
   let posStrategy: string
   if (posLower.includes('btn')) {
     posStrategy = 'BTN: widest open-raise range (~45-50% hands), steal often, apply max pressure post-flop IP'
@@ -610,6 +636,14 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   } else {
     posStrategy = 'EP/MP: tight range, raise for value/protection, fold to 3-bets without premiums'
   }
+
+  // ── River IP + opponent checked: 3-way decision note ────────────────────────
+  const isRiver = state.phase === 'river'
+  const opponentChecked = isRiver && toCall === 0 &&
+    state.actionHistory.some((a) => a.action === 'check' && a.playerId !== player.id)
+  const riverIpCheckNote = isRiver && isIP && opponentChecked
+    ? `RIVER IP + OPPONENT CHECKED: You have exactly 3 options — (A) Value bet (SMALL/MEDIUM/LARGE) with strong made hand, (B) Bluff bet (SMALL/MEDIUM) to fold out weak hands you can't beat, (C) Check behind for free showdown with medium-strength hands. Do NOT consider call or fold here — bet or check only.`
+    : null
 
   // ── Bluff frequency guidance ─────────────────────────────────────────────────
   const bluffBase = toCall > 0
@@ -742,7 +776,7 @@ ${rangeAnalysisLines.map((l) => `- ${l}`).join('\n')}
 ## Strategic Context
 - Position strategy : ${posStrategy}
 - Range strategy    : ${rangeStrategyHint}${nutStrategyHint ? `\n- Nut advantage    : ${nutStrategyHint}` : ''}
-- Bluff frequency   : ${bluffRatio}
+- Bluff frequency   : ${bluffRatio}${riverIpCheckNote ? `\n- River situation  : ${riverIpCheckNote}` : ''}
 
 ## Active Opponents
 ${opponents || '  (none remaining)'}
@@ -759,6 +793,7 @@ ${formatActionHistory(state.actionHistory, state.players)}
 6. Multiway: avoid bluffing unless you have strong fold equity. Bet for value or check.
 7. Range advantage (hero): increase bet frequency, double barrel more, bet for protection and value.
 8. Range disadvantage (villain): prefer check-raise and check-call; avoid wide donk-betting; trap with strong hands.
+9. River IP bluff: when hand is Tier5-Trash or Tier5-Overcard and you are IP (BTN/CO) with opponent checked, consider SMALL or MEDIUM bluff bet (~30-40% frequency) to balance your betting range and deny free showdowns to dominated hands. Use blockers to nuts as additional motivation.
 
 ## Your Valid Actions
 ${validActions.map((a) => `  • ${a}`).join('\n')}
