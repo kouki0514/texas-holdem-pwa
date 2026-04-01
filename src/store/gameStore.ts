@@ -73,6 +73,8 @@ interface GameStore extends GameState {
   _handPersisted: boolean
   /** Net chip change per hand for the human player: handNumber → netChips */
   handNetChipsMap: Record<number, number>
+  /** Initial chip count per player (set once at game start): playerId → chips */
+  initialStackMap: Record<string, number>
 
   initGame: (players: Player[]) => void
   startNewHand: () => void
@@ -84,6 +86,7 @@ interface GameStore extends GameState {
   setPreflopClaude: (enabled: boolean) => void
   clearReasoning: () => void
   quitGame: () => void
+  addOnChips: (playerIds: string[]) => void
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -105,9 +108,12 @@ export const useGameStore = create<GameStore>()(
     _chipsAtHandStart: 0,
     _handPersisted: false,
     handNetChipsMap: {},
+    initialStackMap: {},
 
     initGame(players) {
       const human = players.find((p) => p.isHuman)
+      const stackMap: Record<string, number> = {}
+      for (const p of players) stackMap[p.id] = p.chips
       set((s) => {
         Object.assign(s, createInitialState(players))
         s.latestReasoning = {}
@@ -120,6 +126,7 @@ export const useGameStore = create<GameStore>()(
         }
         s._vpipThisHand = false
         s.handNetChipsMap = {}
+        s.initialStackMap = stackMap
       })
     },
 
@@ -357,6 +364,20 @@ export const useGameStore = create<GameStore>()(
       set((s) => {
         s.latestReasoning = {}
         s.reasoningLog = []
+      })
+    },
+
+    addOnChips(playerIds) {
+      const stackMap = get().initialStackMap
+      set((s) => {
+        for (const p of s.players) {
+          if (playerIds.includes(p.id)) {
+            const initial = stackMap[p.id] ?? 0
+            if (initial > 0 && p.chips < initial) {
+              p.chips = initial
+            }
+          }
+        }
       })
     },
 

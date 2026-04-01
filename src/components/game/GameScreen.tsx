@@ -30,11 +30,34 @@ export function GameScreen() {
 
   useSoundEffects()
 
+  const initialStackMap  = useGameStore((s) => s.initialStackMap)
+  const addOnChips       = useGameStore((s) => s.addOnChips)
+
   const [showResult, setShowResult] = useState(false)
   const [showQuitConfirm, setShowQuitConfirm] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [showReasoning, setShowReasoning] = useState(false)
+  const [showAddOn, setShowAddOn] = useState(false)
+  const [addOnSelected, setAddOnSelected] = useState<Set<string>>(new Set())
   useEffect(() => { if (phase === 'showdown') setShowResult(true) }, [phase])
+
+  // Players eligible for add-on: below initial stack at showdown
+  const addOnEligible = phase === 'showdown'
+    ? players.filter((p) => {
+        const initial = initialStackMap[p.id] ?? 0
+        return initial > 0 && p.chips < initial
+      })
+    : []
+
+  const handleOpenAddOn = () => {
+    setAddOnSelected(new Set(addOnEligible.map((p) => p.id)))
+    setShowAddOn(true)
+  }
+
+  const handleConfirmAddOn = () => {
+    addOnChips([...addOnSelected])
+    setShowAddOn(false)
+  }
 
   const handleNextHand = () => { setShowResult(false); startNewHand() }
   const handleQuit = () => setShowQuitConfirm(true)
@@ -153,13 +176,78 @@ export function GameScreen() {
 
       {/* Next hand floating button — shown when Showdown is closed but phase is still showdown */}
       {phase === 'showdown' && !showResult && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
+          {addOnEligible.length > 0 && (
+            <button
+              onClick={handleOpenAddOn}
+              className="px-5 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-full shadow-xl text-sm transition-colors"
+            >
+              アドオン
+            </button>
+          )}
           <button
             onClick={handleNextHand}
             className="px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-full shadow-2xl text-sm transition-colors"
           >
             次のハンド →
           </button>
+        </div>
+      )}
+
+      {/* Add-on modal */}
+      {showAddOn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-felt-dark border border-white/20 rounded-2xl p-6 w-80 flex flex-col gap-4 shadow-2xl">
+            <h2 className="text-lg font-bold text-white text-center">アドオン</h2>
+            <p className="text-xs text-white/50 text-center">初期スタックまでチップを補填します</p>
+            <div className="flex flex-col gap-2">
+              {addOnEligible.map((p) => {
+                const initial = initialStackMap[p.id] ?? 0
+                const shortfall = initial - p.chips
+                const checked = addOnSelected.has(p.id)
+                return (
+                  <label key={p.id} className="flex items-center justify-between gap-3 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white/5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setAddOnSelected((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(p.id)) next.delete(p.id)
+                            else next.add(p.id)
+                            return next
+                          })
+                        }}
+                        className="w-4 h-4 accent-green-500"
+                      />
+                      <span className={`text-sm font-semibold ${p.isHuman ? 'text-green-300' : 'text-white'}`}>
+                        {p.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-white/60 font-mono">
+                      {p.chips} → {initial} <span className="text-green-400">+{shortfall}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddOn(false)}
+                className="flex-1 py-2 rounded-lg border border-white/20 text-white/70 hover:bg-white/10 text-sm transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConfirmAddOn}
+                disabled={addOnSelected.size === 0}
+                className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
+              >
+                アドオン実行
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
