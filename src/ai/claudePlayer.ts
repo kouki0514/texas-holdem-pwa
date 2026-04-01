@@ -377,6 +377,179 @@ function betSizingGuide(texture: BoardTexture | null, totalPot: number): string 
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Range estimation
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface RangeTierDist {
+  tier1: number  // fraction [0,1]
+  tier2: number
+  tier3: number
+  tier4: number
+  tier5: number
+}
+
+interface PlayerRangeEstimate {
+  position: string
+  action: string
+  dist: RangeTierDist
+  description: string
+}
+
+/**
+ * Estimate a player's likely hand range (Tier distribution) from their
+ * position and the most aggressive preflop action they took.
+ */
+function estimatePlayerRange(
+  position: string,
+  preflopAction: 'fold' | 'call' | 'raise' | 'all-in' | 'none',
+): PlayerRangeEstimate {
+  const pos = position.toLowerCase()
+
+  // Position looseness factor — BTN opens widest, EP tightest
+  type PosKey = 'btn' | 'co' | 'mp' | 'sb' | 'bb' | 'ep'
+  const posKey: PosKey =
+    pos.includes('btn') ? 'btn'
+    : pos.includes('co') ? 'co'
+    : pos.includes('sb') ? 'sb'
+    : pos.includes('bb') ? 'bb'
+    : pos.includes('mp') ? 'mp'
+    : 'ep'
+
+  // Base Tier distributions per position + action
+  // Values are approximate percentages of their range that fall into each tier
+  const tableRaise: Record<PosKey, RangeTierDist> = {
+    btn: { tier1: 0.08, tier2: 0.18, tier3: 0.28, tier4: 0.26, tier5: 0.20 },
+    co:  { tier1: 0.10, tier2: 0.22, tier3: 0.30, tier4: 0.22, tier5: 0.16 },
+    mp:  { tier1: 0.14, tier2: 0.28, tier3: 0.32, tier4: 0.18, tier5: 0.08 },
+    sb:  { tier1: 0.10, tier2: 0.20, tier3: 0.28, tier4: 0.24, tier5: 0.18 },
+    bb:  { tier1: 0.16, tier2: 0.26, tier3: 0.30, tier4: 0.18, tier5: 0.10 },
+    ep:  { tier1: 0.20, tier2: 0.32, tier3: 0.28, tier4: 0.14, tier5: 0.06 },
+  }
+  const tableCall: Record<PosKey, RangeTierDist> = {
+    btn: { tier1: 0.06, tier2: 0.16, tier3: 0.26, tier4: 0.28, tier5: 0.24 },
+    co:  { tier1: 0.06, tier2: 0.16, tier3: 0.28, tier4: 0.28, tier5: 0.22 },
+    mp:  { tier1: 0.08, tier2: 0.20, tier3: 0.32, tier4: 0.26, tier5: 0.14 },
+    sb:  { tier1: 0.06, tier2: 0.14, tier3: 0.24, tier4: 0.30, tier5: 0.26 },
+    bb:  { tier1: 0.04, tier2: 0.12, tier3: 0.24, tier4: 0.32, tier5: 0.28 },
+    ep:  { tier1: 0.10, tier2: 0.22, tier3: 0.34, tier4: 0.22, tier5: 0.12 },
+  }
+  const tableAllIn: Record<PosKey, RangeTierDist> = {
+    btn: { tier1: 0.30, tier2: 0.35, tier3: 0.20, tier4: 0.10, tier5: 0.05 },
+    co:  { tier1: 0.35, tier2: 0.35, tier3: 0.18, tier4: 0.08, tier5: 0.04 },
+    mp:  { tier1: 0.42, tier2: 0.34, tier3: 0.14, tier4: 0.07, tier5: 0.03 },
+    sb:  { tier1: 0.32, tier2: 0.34, tier3: 0.20, tier4: 0.10, tier5: 0.04 },
+    bb:  { tier1: 0.28, tier2: 0.32, tier3: 0.22, tier4: 0.12, tier5: 0.06 },
+    ep:  { tier1: 0.50, tier2: 0.32, tier3: 0.12, tier4: 0.04, tier5: 0.02 },
+  }
+
+  let dist: RangeTierDist
+  let action: string
+  if (preflopAction === 'raise') {
+    dist = tableRaise[posKey]
+    action = 'raise'
+  } else if (preflopAction === 'call') {
+    dist = tableCall[posKey]
+    action = 'call'
+  } else if (preflopAction === 'all-in') {
+    dist = tableAllIn[posKey]
+    action = 'all-in'
+  } else {
+    // No preflop action info — use average call range
+    dist = tableCall[posKey]
+    action = preflopAction === 'fold' ? 'folded(no info)' : 'unknown'
+  }
+
+  const fmt = (v: number) => `${Math.round(v * 100)}%`
+  const description =
+    `Tier1:${fmt(dist.tier1)} Tier2:${fmt(dist.tier2)} Tier3:${fmt(dist.tier3)} Tier4:${fmt(dist.tier4)} Tier5:${fmt(dist.tier5)}`
+
+  return { position, action, dist, description }
+}
+
+interface RangeAdvantageResult {
+  rangeAdvantage: 'hero' | 'villain' | 'neutral'
+  nutAdvantage: 'hero' | 'villain' | 'neutral'
+  summary: string
+}
+
+/**
+ * Analyze whether the board texture favours hero's range or opponent ranges.
+ * Uses Tier distribution weighted by how well each tier connects to the board.
+ */
+function analyzeBoardRangeAdvantage(
+  communityCards: Card[],
+  heroRange: PlayerRangeEstimate,
+  opponentRanges: PlayerRangeEstimate[],
+): RangeAdvantageResult {
+  if (communityCards.length < 3 || opponentRanges.length === 0) {
+    return { rangeAdvantage: 'neutral', nutAdvantage: 'neutral', summary: 'Preflop — no board range analysis.' }
+  }
+
+  const texture = analyzeBoardTexture(communityCards)
+
+  // Score a range distribution against the board texture.
+  // High cards on board → premiums (T1/T2) connect better.
+  // Wet boards → T3/T4 (suited connectors, speculative) also connect.
+  const boardHighVal = Math.max(...communityCards.map((c) => rankToValue(c.rank)))
+  const highBoard = boardHighVal >= 12  // Q, K, A high
+
+  function scoreRange(r: PlayerRangeEstimate): number {
+    const d = r.dist
+    let score = 0
+    // Premium hands always connect (pairs, top pair, strong draws)
+    score += d.tier1 * 1.0 + d.tier2 * 0.8
+
+    if (highBoard) {
+      // High board: premiums are more connected, speculative less
+      score += d.tier3 * 0.5 + d.tier4 * 0.2 + d.tier5 * 0.05
+    } else {
+      // Low/mid board: suited connectors and speculative hands gain value
+      score += d.tier3 * 0.7 + d.tier4 * 0.45 + d.tier5 * 0.2
+    }
+
+    // Wet board bonus for draw-heavy ranges (T3/T4)
+    if (texture && (texture.suitedness !== 'rainbow' || texture.connected)) {
+      score += (d.tier3 + d.tier4) * 0.1
+    }
+
+    return score
+  }
+
+  const heroScore = scoreRange(heroRange)
+  const oppScore = opponentRanges.reduce((sum, r) => sum + scoreRange(r), 0) / opponentRanges.length
+
+  const delta = heroScore - oppScore
+  const rangeAdvantage: RangeAdvantageResult['rangeAdvantage'] =
+    delta > 0.05 ? 'hero' : delta < -0.05 ? 'villain' : 'neutral'
+
+  // Nut advantage: who has more Tier1 hands?
+  const heroNuts = heroRange.dist.tier1
+  const oppNuts = opponentRanges.reduce((sum, r) => sum + r.dist.tier1, 0) / opponentRanges.length
+  const nutDelta = heroNuts - oppNuts
+  const nutAdvantage: RangeAdvantageResult['nutAdvantage'] =
+    nutDelta > 0.03 ? 'hero' : nutDelta < -0.03 ? 'villain' : 'neutral'
+
+  const parts: string[] = []
+  if (rangeAdvantage === 'hero') {
+    parts.push(`Hero has range advantage (score ${heroScore.toFixed(2)} vs ${oppScore.toFixed(2)}) — this board connects better to hero's range.`)
+  } else if (rangeAdvantage === 'villain') {
+    parts.push(`Villain(s) have range advantage (score ${oppScore.toFixed(2)} vs ${heroScore.toFixed(2)}) — board favours opponent range.`)
+  } else {
+    parts.push(`Ranges are roughly even on this board (${heroScore.toFixed(2)} vs ${oppScore.toFixed(2)}).`)
+  }
+
+  if (nutAdvantage === 'hero') {
+    parts.push(`Hero has nut advantage (more Tier1 combos: ${Math.round(heroNuts * 100)}% vs ${Math.round(oppNuts * 100)}%).`)
+  } else if (nutAdvantage === 'villain') {
+    parts.push(`Villain(s) have nut advantage (more Tier1 combos: ${Math.round(oppNuts * 100)}% vs ${Math.round(heroNuts * 100)}%).`)
+  } else {
+    parts.push(`Nut advantage is neutral.`)
+  }
+
+  return { rangeAdvantage, nutAdvantage, summary: parts.join(' ') }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // System prompt builder
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -456,6 +629,61 @@ function buildSystemPrompt(state: GameState, player: Player): string {
   const textureStr = texture ? texture.summary : 'N/A (preflop)'
   const sizingGuide = betSizingGuide(texture, totalPot)
 
+  // ── Range analysis ───────────────────────────────────────────────────────────
+  // Infer each player's preflop action from actionHistory
+  function getPreflopAction(playerId: string): 'fold' | 'call' | 'raise' | 'all-in' | 'none' {
+    const preflopActions = state.actionHistory.filter((a) => {
+      // actionHistory only has current street; we approximate from current hand context
+      return a.playerId === playerId
+    })
+    if (preflopActions.length === 0) return 'none'
+    // Find the most aggressive action
+    const actionOrder = ['all-in', 'raise', 'call', 'fold'] as const
+    for (const act of actionOrder) {
+      if (preflopActions.some((a) => a.action === act)) return act
+    }
+    return 'none'
+  }
+
+  const heroPositionLabel = getPositionLabel(state.players, player, state.dealerIndex)
+  const heroPreflopAction = getPreflopAction(player.id)
+  const heroRange = estimatePlayerRange(heroPositionLabel, heroPreflopAction)
+
+  const opponentRanges = activeOpponents.map((opp) => {
+    const oppPos = getPositionLabel(state.players, opp, state.dealerIndex)
+    const oppAction = getPreflopAction(opp.id)
+    return estimatePlayerRange(oppPos, oppAction)
+  })
+
+  const rangeAdvResult = analyzeBoardRangeAdvantage(state.communityCards, heroRange, opponentRanges)
+
+  const rangeAnalysisLines: string[] = [
+    `Hero range estimate   : ${heroRange.description} (based on ${heroRange.position}, action: ${heroRange.action})`,
+  ]
+  opponentRanges.forEach((r, i) => {
+    const name = activeOpponents[i]?.name ?? `Opp${i + 1}`
+    rangeAnalysisLines.push(`${name} range estimate: ${r.description} (${r.position}, action: ${r.action})`)
+  })
+  rangeAnalysisLines.push(`Range advantage: ${rangeAdvResult.rangeAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.rangeAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}`)
+  rangeAnalysisLines.push(`Nut advantage  : ${rangeAdvResult.nutAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.nutAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}`)
+  rangeAnalysisLines.push(rangeAdvResult.summary)
+
+  // ── Range-based strategy hint ─────────────────────────────────────────────────
+  let rangeStrategyHint: string
+  if (rangeAdvResult.rangeAdvantage === 'hero') {
+    rangeStrategyHint = 'Hero has range advantage — increase bet frequency, prefer leading bets and double barrels over checking.'
+  } else if (rangeAdvResult.rangeAdvantage === 'villain') {
+    rangeStrategyHint = 'Villain(s) have range advantage — prefer check-raise or check-call; avoid wide donk-betting; let opponent bet into your strong hands.'
+  } else {
+    rangeStrategyHint = 'Ranges are balanced — mix bets and checks; use hand strength and position to guide sizing.'
+  }
+
+  const nutStrategyHint = rangeAdvResult.nutAdvantage === 'hero'
+    ? 'Hero has nut advantage — polarize sizing (LARGE/OVERBET) when value betting; opponent must call with weaker ranges.'
+    : rangeAdvResult.nutAdvantage === 'villain'
+      ? 'Villain has nut advantage — be cautious with medium-strength hands facing large bets; check-raise bluffs less effective.'
+      : ''
+
   // ── Valid actions list ───────────────────────────────────────────────────────
   const validActions: string[] = ['fold']
   if (canCheck) {
@@ -485,7 +713,7 @@ function buildSystemPrompt(state: GameState, player: Player): string {
     })
     .join('\n')
 
-  return `You are a GTO-trained Texas Hold'em expert named "${player.name}". Make decisions using equity, pot odds, SPR, board texture, position, and balanced bluff/value ratios. Always reason step-by-step before deciding.
+  return `You are a GTO-trained Texas Hold'em expert named "${player.name}". Make decisions using equity, pot odds, SPR, board texture, position, range analysis, and balanced bluff/value ratios. Always reason step-by-step before deciding.
 
 ## Situation
 - Phase           : ${state.phase}
@@ -508,8 +736,12 @@ function buildSystemPrompt(state: GameState, player: Player): string {
 ## Bet Sizing Guide
 ${sizingGuide}
 
+## Range Analysis
+${rangeAnalysisLines.map((l) => `- ${l}`).join('\n')}
+
 ## Strategic Context
 - Position strategy : ${posStrategy}
+- Range strategy    : ${rangeStrategyHint}${nutStrategyHint ? `\n- Nut advantage    : ${nutStrategyHint}` : ''}
 - Bluff frequency   : ${bluffRatio}
 
 ## Active Opponents
@@ -525,6 +757,8 @@ ${formatActionHistory(state.actionHistory, state.players)}
 4. Large opponent bets (>2/3 pot) = polarised → re-raise or fold, rarely call.
 5. Use bet sizing guide above — choose SMALL/MEDIUM/LARGE/OVERBET and state the exact chip amount.
 6. Multiway: avoid bluffing unless you have strong fold equity. Bet for value or check.
+7. Range advantage (hero): increase bet frequency, double barrel more, bet for protection and value.
+8. Range disadvantage (villain): prefer check-raise and check-call; avoid wide donk-betting; trap with strong hands.
 
 ## Your Valid Actions
 ${validActions.map((a) => `  • ${a}`).join('\n')}
@@ -534,7 +768,7 @@ Respond with ONLY a JSON object — no markdown, no extra text:
 {
   "action": "fold" | "check" | "call" | "raise" | "all-in",
   "amount": <integer, REQUIRED when action is "raise" — total bet size this street, use sizing guide above>,
-  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, sizing choice, then explain decision in Japanese>"
+  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, range advantage, sizing choice, then explain decision in Japanese>"
 }
 
 Constraints:
