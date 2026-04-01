@@ -44,6 +44,24 @@ export interface SessionStats {
   handsPlayed: number
   handsWon: number       // hands where human won at least one pot
   vpipHands: number      // hands where human voluntarily put chips in preflop
+  // ── Advanced metrics (opportunities / occurrences) ──────────────────────────
+  stealOpps: number       // ①Steal: BTN/CO/SB with no prior open raise
+  steals: number
+  checkRaiseOpps: number  // ②CheckRaise: human checked, then faced a bet same street
+  checkRaises: number
+  threeBetOpps: number    // ③3bet: opponent opened, human is first to act after
+  threeBets: number
+  foldTo3betOpps: number  // ④Fold-to-3bet: human opened, then faced 3-bet
+  foldTo3bets: number
+  cbetOpps: number        // ⑤Cbet: human was PFR and is first to act on flop
+  cbets: number
+  foldToCbetOpps: number  // ⑥Fold-to-Cbet: opponent c-bet flop, human must act
+  foldToCbets: number
+  sawFlopHands: number    // ⑦WTSD base: hands where human saw the flop
+  wtsdHands: number       // ⑦WTSD: saw flop and reached showdown
+  wsdHands: number        // ⑧WSD base
+  wsdWins: number         // ⑧WSD: won at showdown
+  totalInvested: number   // ⑨ROI denominator: total chips put in across all hands
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -73,6 +91,25 @@ interface GameStore extends GameState {
   _handPersisted: boolean
   /** Net chip change per hand for the human player: handNumber → netChips */
   handNetChipsMap: Record<number, number>
+  // ── Per-hand advanced stat flags ─────────────────────────────────────────────
+  /** Human was the preflop raiser (PFR) this hand */
+  _humanPfr: boolean
+  /** Human checked at least once this street (reset on street change) */
+  _humanCheckedThisStreet: boolean
+  /** Human has already been counted for CheckRaise opp this street */
+  _checkRaiseOppRecorded: boolean
+  /** Human saw the flop (called/raised preflop or was BB that wasn't raised) */
+  _humanSawFlop: boolean
+  /** Opponent c-bet the flop (first bet on flop by a non-human who was PFR) */
+  _opponentCbetFlop: boolean
+  /** Human has already responded to opponent c-bet this hand (avoid double count) */
+  _humanActedVsCbet: boolean
+  /** Human faced a 3-bet after opening this hand */
+  _humanFaced3bet: boolean
+  /** Human's open has already triggered a 3bet-opp count this hand */
+  _threeBetOppRecorded: boolean
+  /** Steal opportunity already counted this hand */
+  _stealOppRecorded: boolean
   /** Initial chip count per player (set once at game start): playerId → chips */
   initialStackMap: Record<string, number>
 
@@ -102,13 +139,33 @@ export const useGameStore = create<GameStore>()(
     claudeThinking: false,
     latestReasoning: {},
     reasoningLog: [],
-    sessionStats: { initialChips: 0, handsPlayed: 0, handsWon: 0, vpipHands: 0 },
+    sessionStats: {
+      initialChips: 0, handsPlayed: 0, handsWon: 0, vpipHands: 0,
+      stealOpps: 0, steals: 0,
+      checkRaiseOpps: 0, checkRaises: 0,
+      threeBetOpps: 0, threeBets: 0,
+      foldTo3betOpps: 0, foldTo3bets: 0,
+      cbetOpps: 0, cbets: 0,
+      foldToCbetOpps: 0, foldToCbets: 0,
+      sawFlopHands: 0, wtsdHands: 0,
+      wsdHands: 0, wsdWins: 0,
+      totalInvested: 0,
+    },
     _vpipThisHand: false,
     _pfrThisHand: false,
     _chipsAtHandStart: 0,
     _handPersisted: false,
     handNetChipsMap: {},
     initialStackMap: {},
+    _humanPfr: false,
+    _humanCheckedThisStreet: false,
+    _checkRaiseOppRecorded: false,
+    _humanSawFlop: false,
+    _opponentCbetFlop: false,
+    _humanActedVsCbet: false,
+    _humanFaced3bet: false,
+    _threeBetOppRecorded: false,
+    _stealOppRecorded: false,
 
     initGame(players) {
       const human = players.find((p) => p.isHuman)
@@ -120,11 +177,27 @@ export const useGameStore = create<GameStore>()(
         s.reasoningLog = []
         s.sessionStats = {
           initialChips: human?.chips ?? 1000,
-          handsPlayed: 0,
-          handsWon: 0,
-          vpipHands: 0,
+          handsPlayed: 0, handsWon: 0, vpipHands: 0,
+          stealOpps: 0, steals: 0,
+          checkRaiseOpps: 0, checkRaises: 0,
+          threeBetOpps: 0, threeBets: 0,
+          foldTo3betOpps: 0, foldTo3bets: 0,
+          cbetOpps: 0, cbets: 0,
+          foldToCbetOpps: 0, foldToCbets: 0,
+          sawFlopHands: 0, wtsdHands: 0,
+          wsdHands: 0, wsdWins: 0,
+          totalInvested: 0,
         }
         s._vpipThisHand = false
+        s._humanPfr = false
+        s._humanCheckedThisStreet = false
+        s._checkRaiseOppRecorded = false
+        s._humanSawFlop = false
+        s._opponentCbetFlop = false
+        s._humanActedVsCbet = false
+        s._humanFaced3bet = false
+        s._threeBetOppRecorded = false
+        s._stealOppRecorded = false
         s.handNetChipsMap = {}
         s.initialStackMap = stackMap
       })
@@ -139,6 +212,15 @@ export const useGameStore = create<GameStore>()(
         s._pfrThisHand = false
         s._chipsAtHandStart = chipsNow
         s._handPersisted = false
+        s._humanPfr = false
+        s._humanCheckedThisStreet = false
+        s._checkRaiseOppRecorded = false
+        s._humanSawFlop = false
+        s._opponentCbetFlop = false
+        s._humanActedVsCbet = false
+        s._humanFaced3bet = false
+        s._threeBetOppRecorded = false
+        s._stealOppRecorded = false
       })
       scheduleAiIfNeeded(get)
     },
@@ -164,6 +246,116 @@ export const useGameStore = create<GameStore>()(
       // Is the human the one folding right now?
       const humanIsFolding = stateSnapshot.players[stateSnapshot.activePlayerIndex]?.isHuman
         && action === 'fold'
+
+      // ── Advanced stat computation (pre-Immer snapshot) ──────────────────────
+      // All flags read from stateSnapshot so they are stable across the set() calls.
+      const isHumanActor = activePlayer?.isHuman === true
+      const phase = stateSnapshot.phase
+      const humanIdx = stateSnapshot.players.findIndex((p) => p.isHuman)
+      const humanPosition = humanIdx >= 0
+        ? calcPosition(humanIdx, stateSnapshot.players.length, stateSnapshot.dealerIndex)
+        : null
+      const isStealPosition = humanPosition === 'BTN' || humanPosition === 'CO' ||
+        humanPosition === 'SB' || humanPosition === 'BTN/SB'
+
+      // ①Steal: BTN/CO/SB open raise (no prior raises in actionHistory)
+      const advSteal = (() => {
+        if (!isHumanActor || phase !== 'preflop') return null
+        if (stateSnapshot._stealOppRecorded) return null
+        if (!isStealPosition) return null
+        // Check no prior raise in this preflop (only blinds posted)
+        const priorRaises = stateSnapshot.actionHistory.filter(
+          (a) => a.action === 'raise' || a.action === 'all-in'
+        )
+        if (priorRaises.length > 0) return null
+        // It's a steal opportunity
+        const didSteal = action === 'raise' || action === 'all-in'
+        return { opp: true, did: didSteal }
+      })()
+
+      // ③3bet opportunity: human faces an open raise (first raiser), human is not BB defending
+      const advThreeBet = (() => {
+        if (!isHumanActor || phase !== 'preflop') return null
+        if (stateSnapshot._threeBetOppRecorded) return null
+        // There must be exactly one raise in actionHistory (the open) and human hasn't raised yet
+        const raises = stateSnapshot.actionHistory.filter(
+          (a) => a.action === 'raise' || a.action === 'all-in'
+        )
+        if (raises.length !== 1) return null
+        if (raises[0].playerId === activePlayer?.id) return null // human's own raise
+        const did3bet = action === 'raise' || action === 'all-in'
+        return { opp: true, did: did3bet }
+      })()
+
+      // ④Fold-to-3bet: human was opener and now faces a 3-bet (2nd raise in preflop)
+      const advFoldTo3bet = (() => {
+        if (!isHumanActor || phase !== 'preflop') return null
+        if (!stateSnapshot._humanPfr) return null
+        if (stateSnapshot._humanFaced3bet) return null
+        // Check there are 2 raises, and the latest is not by human
+        const raises = stateSnapshot.actionHistory.filter(
+          (a) => a.action === 'raise' || a.action === 'all-in'
+        )
+        if (raises.length < 2) return null
+        const lastRaiser = raises[raises.length - 1]
+        if (lastRaiser.playerId === activePlayer?.id) return null
+        return { opp: true, did: action === 'fold' }
+      })()
+
+      // ②CheckRaise: human previously checked this street and now faces a bet
+      const advCheckRaise = (() => {
+        if (!isHumanActor || phase === 'preflop') return null
+        if (!stateSnapshot._humanCheckedThisStreet) return null
+        if (stateSnapshot._checkRaiseOppRecorded) return null
+        // There must be a bet on the table (toCall > 0)
+        const toCallNow = Math.max(0, stateSnapshot.currentBet - (activePlayer?.currentBet ?? 0))
+        if (toCallNow === 0) return null
+        const didCheckRaise = action === 'raise' || action === 'all-in'
+        return { opp: true, did: didCheckRaise }
+      })()
+
+      // ⑤Cbet: human was PFR, flop, first to act (no prior bets this street)
+      const advCbet = (() => {
+        if (!isHumanActor || phase !== 'flop') return null
+        if (!stateSnapshot._humanPfr) return null
+        // No bets this street yet: currentBet === 0 or equals BB (preflop residual cleared on new street)
+        const toCallNow = Math.max(0, stateSnapshot.currentBet - (activePlayer?.currentBet ?? 0))
+        if (toCallNow > 0) return null // someone already bet
+        // Check actionHistory has no bets this street
+        const flopBets = stateSnapshot.actionHistory.filter(
+          (a) => a.action === 'raise' || a.action === 'all-in'
+        )
+        if (flopBets.length > 0) return null
+        const didCbet = action === 'raise' || action === 'all-in'
+        return { opp: true, did: didCbet }
+      })()
+
+      // ⑥Fold-to-Cbet: opponent c-bet (detected via _opponentCbetFlop), human must respond
+      const advFoldToCbet = (() => {
+        if (!isHumanActor || phase !== 'flop') return null
+        if (!stateSnapshot._opponentCbetFlop) return null
+        if (stateSnapshot._humanActedVsCbet) return null
+        return { opp: true, did: action === 'fold' }
+      })()
+
+      // Detect opponent c-bet: non-human actor raises/bets on flop when human was NOT PFR
+      // (We track this for future human actions in the same street)
+      const isOpponentCbet = !isHumanActor && phase === 'flop' &&
+        !stateSnapshot._humanPfr &&
+        !stateSnapshot._opponentCbetFlop &&
+        (action === 'raise' || action === 'all-in')
+
+      // PFR update: if human raises preflop, set _humanPfr
+      const humanPfrNow = stateSnapshot._humanPfr ||
+        (isHumanActor && phase === 'preflop' && (action === 'raise' || action === 'all-in'))
+
+      // Track human check (for CheckRaise detection)
+      const humanCheckedNow = stateSnapshot._humanCheckedThisStreet ||
+        (isHumanActor && phase !== 'preflop' && action === 'check')
+
+      // Saw-flop tracking: if this action transitions to flop, mark human as having seen flop
+      // (captured in advanceRunout / street transition — we detect it by phase after applyAction)
+      // We'll handle sawFlop in the set() block by checking next.phase
 
       // Record human action into reasoningLog so it appears in the history timeline
       if (activePlayer?.isHuman) {
@@ -191,6 +383,54 @@ export const useGameStore = create<GameStore>()(
           next = advanceToNextStreet(next)
         }
 
+        // ── Advanced stat flags update ───────────────────────────────────────
+        if (humanPfrNow) s._humanPfr = true
+        if (humanCheckedNow) s._humanCheckedThisStreet = true
+        if (isOpponentCbet) s._opponentCbetFlop = true
+
+        // Reset per-street flags when street advances
+        const prevPhase = stateSnapshot.phase
+        if (next.phase !== prevPhase && next.phase !== 'showdown') {
+          s._humanCheckedThisStreet = false
+          s._checkRaiseOppRecorded = false
+        }
+
+        // ①Steal
+        if (advSteal) {
+          s.sessionStats.stealOpps += 1
+          if (advSteal.did) s.sessionStats.steals += 1
+          s._stealOppRecorded = true
+        }
+        // ③3bet
+        if (advThreeBet) {
+          s.sessionStats.threeBetOpps += 1
+          if (advThreeBet.did) s.sessionStats.threeBets += 1
+          s._threeBetOppRecorded = true
+        }
+        // ④Fold-to-3bet
+        if (advFoldTo3bet) {
+          s.sessionStats.foldTo3betOpps += 1
+          if (advFoldTo3bet.did) s.sessionStats.foldTo3bets += 1
+          s._humanFaced3bet = true
+        }
+        // ②CheckRaise
+        if (advCheckRaise) {
+          s.sessionStats.checkRaiseOpps += 1
+          if (advCheckRaise.did) s.sessionStats.checkRaises += 1
+          s._checkRaiseOppRecorded = true
+        }
+        // ⑤Cbet
+        if (advCbet) {
+          s.sessionStats.cbetOpps += 1
+          if (advCbet.did) s.sessionStats.cbets += 1
+        }
+        // ⑥Fold-to-Cbet
+        if (advFoldToCbet) {
+          s.sessionStats.foldToCbetOpps += 1
+          if (advFoldToCbet.did) s.sessionStats.foldToCbets += 1
+          s._humanActedVsCbet = true
+        }
+
         // Record session stats at showdown (covers all endings)
         if (next.phase === 'showdown' && !s._handPersisted) {
           const humanPlayer = next.players.find((p) => p.isHuman)
@@ -198,18 +438,52 @@ export const useGameStore = create<GameStore>()(
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (vpipNow) s.sessionStats.vpipHands += 1
+          // ⑦WTSD / ⑧WSD
+          if (s._humanSawFlop) {
+            s.sessionStats.wtsdHands += 1
+          }
+          if (humanPlayer && !humanPlayer.isFolded) {
+            const isRealShowdown = !next.winners.some((w) => w.isUncontested)
+            if (isRealShowdown) {
+              s.sessionStats.wsdHands += 1
+              if (humanWon) s.sessionStats.wsdWins += 1
+            }
+          }
+          // ⑨ROI: record investment
+          const invested = humanPlayer?.totalBetThisHand ?? 0
+          if (invested > 0) s.sessionStats.totalInvested += invested
         }
 
         // When human folds mid-hand (others still playing), count it now
         if (humanIsFolding && next.phase !== 'showdown' && !s._handPersisted) {
           s.sessionStats.handsPlayed += 1
           if (vpipNow) s.sessionStats.vpipHands += 1
+          const humanPlayer = next.players.find((p) => p.isHuman)
+          const invested = humanPlayer?.totalBetThisHand ?? 0
+          if (invested > 0) s.sessionStats.totalInvested += invested
+        }
+
+        // Track human saw flop: if previous phase was preflop and next is flop/later
+        if (prevPhase === 'preflop' && next.phase !== 'preflop' && next.phase !== 'showdown') {
+          const humanInNext = next.players.find((p) => p.isHuman)
+          if (humanInNext && !humanInNext.isFolded) {
+            s._humanSawFlop = true
+            s.sessionStats.sawFlopHands += 1
+          }
         }
 
         Object.assign(s, next)
-        // Restore flags overwritten by Object.assign (next is GameState, has no _vpipThisHand)
+        // Restore flags overwritten by Object.assign (next is GameState, has no these flags)
         s._vpipThisHand = vpipNow
         s._pfrThisHand = pfrNow
+        s._humanPfr = humanPfrNow
+        if (humanCheckedNow) s._humanCheckedThisStreet = true
+        if (isOpponentCbet) s._opponentCbetFlop = true
+        if (advSteal) s._stealOppRecorded = true
+        if (advThreeBet) s._threeBetOppRecorded = true
+        if (advFoldTo3bet) s._humanFaced3bet = true
+        if (advCheckRaise) s._checkRaiseOppRecorded = true
+        if (advFoldToCbet) s._humanActedVsCbet = true
       })
 
       // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues
@@ -255,7 +529,23 @@ export const useGameStore = create<GameStore>()(
       set((s) => {
         const state = s as GameState
         if (state.phase === 'showdown' || state.phase === 'waiting') return
+        const prevPhase = state.phase
         const next = advanceToNextStreet(state)
+
+        // Track saw-flop on runout street transitions
+        if (prevPhase === 'preflop' && next.phase !== 'preflop' && next.phase !== 'showdown') {
+          const humanInNext = next.players.find((p) => p.isHuman)
+          if (humanInNext && !humanInNext.isFolded && !s._humanSawFlop) {
+            s._humanSawFlop = true
+            s.sessionStats.sawFlopHands += 1
+          }
+        }
+
+        // Reset per-street flags when street advances
+        if (next.phase !== prevPhase && next.phase !== 'showdown') {
+          s._humanCheckedThisStreet = false
+          s._checkRaiseOppRecorded = false
+        }
 
         // Record session stats when runout reaches showdown (persist happens outside via setTimeout)
         if (next.phase === 'showdown') {
@@ -264,9 +554,28 @@ export const useGameStore = create<GameStore>()(
           s.sessionStats.handsPlayed += 1
           if (humanWon) s.sessionStats.handsWon += 1
           if (s._vpipThisHand) s.sessionStats.vpipHands += 1
+          // ⑦WTSD / ⑧WSD
+          if (s._humanSawFlop) {
+            s.sessionStats.wtsdHands += 1
+          }
+          if (humanPlayer && !humanPlayer.isFolded) {
+            const isRealShowdown = !next.winners.some((w) => w.isUncontested)
+            if (isRealShowdown) {
+              s.sessionStats.wsdHands += 1
+              if (humanWon) s.sessionStats.wsdWins += 1
+            }
+          }
+          // ⑨ROI investment
+          const humanPlayer2 = next.players.find((p) => p.isHuman)
+          const invested = humanPlayer2?.totalBetThisHand ?? 0
+          if (invested > 0) s.sessionStats.totalInvested += invested
         }
 
         Object.assign(s, next)
+        // Restore per-hand flags overwritten by Object.assign
+        if (prevPhase === 'preflop' && next.phase !== 'preflop') {
+          // keep _humanSawFlop as set above
+        }
       })
 
       // Persist hand record outside Immer draft via setTimeout to avoid Proxy serialization issues

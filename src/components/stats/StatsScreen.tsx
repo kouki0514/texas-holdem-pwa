@@ -1,26 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadAllHands, clearAllHands, type HandRecord } from '@/store/statsDb'
-import type { HandRank } from '@/game/types'
-
-const HAND_RANK_JA: Record<HandRank, string> = {
-  'royal-flush':     'ロイヤルフラッシュ',
-  'straight-flush':  'ストレートフラッシュ',
-  'four-of-a-kind':  'フォーカード',
-  'full-house':      'フルハウス',
-  'flush':           'フラッシュ',
-  'straight':        'ストレート',
-  'three-of-a-kind': 'スリーカード',
-  'two-pair':        'ツーペア',
-  'one-pair':        'ワンペア',
-  'high-card':       'ハイカード',
-}
-
-const SUIT_SYM: Record<string, string> = {
-  spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣',
-}
-const SUIT_COLOR: Record<string, string> = {
-  spades: 'text-white', hearts: 'text-red-400', diamonds: 'text-red-400', clubs: 'text-white',
-}
+import { useGameStore } from '@/store/gameStore'
 
 interface Props {
   onClose: () => void
@@ -36,7 +16,6 @@ function PnLChart({ hands }: { hands: HandRecord[] }) {
   const iW = W - PAD.l - PAD.r
   const iH = H - PAD.t - PAD.b
 
-  // cumulative net
   const cumulative: number[] = []
   let running = 0
   for (const h of hands) { running += h.netChips; cumulative.push(running) }
@@ -61,20 +40,15 @@ function PnLChart({ hands }: { hands: HandRecord[] }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 100 }}>
-      {/* zero line */}
       <line x1={PAD.l} y1={y0} x2={W - PAD.r} y2={y0} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-      {/* area fill */}
       <polygon points={areaPoints} fill={lineColor} opacity="0.12" />
-      {/* line */}
       <polyline points={points} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
-      {/* y-axis labels */}
       {[yMin, 0, yMax].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
         <text key={v} x={PAD.l - 4} y={yScale(v) + 4} textAnchor="end"
           fontSize="8" fill="rgba(255,255,255,0.4)">
           {v >= 0 ? `+${v}` : v}
         </text>
       ))}
-      {/* x-axis: first and last hand number */}
       <text x={PAD.l} y={H - 4} fontSize="8" fill="rgba(255,255,255,0.4)">{hands[0].handNumber}</text>
       <text x={W - PAD.r} y={H - 4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.4)">
         {hands[hands.length - 1].handNumber}
@@ -83,10 +57,29 @@ function PnLChart({ hands }: { hands: HandRecord[] }) {
   )
 }
 
+// ── Stat card ─────────────────────────────────────────────────────────────────
+interface StatCardProps {
+  label: string
+  value: string
+  sub?: string
+  color?: string
+}
+
+function StatCard({ label, value, sub, color }: StatCardProps) {
+  return (
+    <div className="bg-black/30 rounded-xl p-3 flex flex-col gap-0.5">
+      <p className="text-[9px] text-white/40 uppercase tracking-wider leading-none">{label}</p>
+      <p className={`text-base font-bold mt-1 ${color ?? 'text-white'}`}>{value}</p>
+      {sub && <p className="text-[9px] text-white/30 font-mono">{sub}</p>}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function StatsScreen({ onClose }: Props) {
   const [hands, setHands] = useState<HandRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const sessionStats = useGameStore((s) => s.sessionStats)
 
   useEffect(() => {
     loadAllHands().then((h) => { setHands(h); setLoading(false) }).catch(() => setLoading(false))
@@ -98,14 +91,14 @@ export function StatsScreen({ onClose }: Props) {
     setHands([])
   }
 
-  // ── Derived stats ────────────────────────────────────────────────────────
+  // ── Derived stats from IndexedDB hands ──────────────────────────────────
   const total      = hands.length
   const won        = hands.filter((h) => h.netChips > 0).length
   const vpipCount  = hands.filter((h) => h.vpip).length
   const pfrCount   = hands.filter((h) => h.pfr).length
   const totalNet   = hands.reduce((s, h) => s + h.netChips, 0)
+  const bigBlind   = 20  // default big blind; used for win rate calc
 
-  // Max drawdown: peak-to-trough on cumulative PnL
   let peak = 0, maxDd = 0, cum = 0
   for (const h of hands) {
     cum += h.netChips
@@ -115,6 +108,76 @@ export function StatsScreen({ onClose }: Props) {
   }
 
   const pct = (n: number, d: number) => d > 0 ? `${((n / d) * 100).toFixed(1)}%` : '—'
+  const num = (n: number, d: number) => d > 0 ? ((n / d) * 100).toFixed(1) : null
+
+  // ── 10 advanced metrics from sessionStats ────────────────────────────────
+  const ss = sessionStats
+  const handsPlayed = ss.handsPlayed || total || 1
+
+  // ①Steal%
+  const stealPct    = pct(ss.steals, ss.stealOpps)
+  const stealSub    = ss.stealOpps > 0 ? `${ss.steals}/${ss.stealOpps}` : '機会なし'
+
+  // ②CheckRaise%
+  const crPct       = pct(ss.checkRaises, ss.checkRaiseOpps)
+  const crSub       = ss.checkRaiseOpps > 0 ? `${ss.checkRaises}/${ss.checkRaiseOpps}` : '機会なし'
+
+  // ③3bet%
+  const threeBetPct = pct(ss.threeBets, ss.threeBetOpps)
+  const threeBetSub = ss.threeBetOpps > 0 ? `${ss.threeBets}/${ss.threeBetOpps}` : '機会なし'
+
+  // ④Fold-to-3bet%
+  const f3bPct      = pct(ss.foldTo3bets, ss.foldTo3betOpps)
+  const f3bSub      = ss.foldTo3betOpps > 0 ? `${ss.foldTo3bets}/${ss.foldTo3betOpps}` : '機会なし'
+
+  // ⑤Cbet%
+  const cbetPct     = pct(ss.cbets, ss.cbetOpps)
+  const cbetSub     = ss.cbetOpps > 0 ? `${ss.cbets}/${ss.cbetOpps}` : '機会なし'
+
+  // ⑥Fold-to-Cbet%
+  const fcbPct      = pct(ss.foldToCbets, ss.foldToCbetOpps)
+  const fcbSub      = ss.foldToCbetOpps > 0 ? `${ss.foldToCbets}/${ss.foldToCbetOpps}` : '機会なし'
+
+  // ⑦WTSD%
+  const wtsdPct     = pct(ss.wtsdHands, ss.sawFlopHands)
+  const wtsdSub     = ss.sawFlopHands > 0 ? `${ss.wtsdHands}/${ss.sawFlopHands}` : '機会なし'
+
+  // ⑧WSD%
+  const wsdPct      = pct(ss.wsdWins, ss.wsdHands)
+  const wsdSub      = ss.wsdHands > 0 ? `${ss.wsdWins}/${ss.wsdHands}` : '機会なし'
+
+  // ⑨ROI
+  const netFromSS   = ss.initialChips > 0
+    ? (hands.length > 0 ? totalNet : 0)
+    : totalNet
+  const roiVal      = ss.totalInvested > 0
+    ? `${((netFromSS / ss.totalInvested) * 100).toFixed(1)}%`
+    : '—'
+  const roiColor    = ss.totalInvested > 0
+    ? (netFromSS >= 0 ? 'text-green-400' : 'text-red-400')
+    : undefined
+
+  // ⑩WinRate (BB/100)
+  const winRateVal  = (() => {
+    const v = num(totalNet / bigBlind * 100, handsPlayed)
+    if (v === null) return '—'
+    const n = parseFloat(v)
+    return `${n >= 0 ? '+' : ''}${n.toFixed(1)}`
+  })()
+  const winRateColor = totalNet >= 0 ? 'text-green-400' : 'text-red-400'
+
+  const advancedMetrics: StatCardProps[] = [
+    { label: '①Steal %', value: stealPct, sub: stealSub },
+    { label: '②Check-Raise %', value: crPct, sub: crSub },
+    { label: '③3-Bet %', value: threeBetPct, sub: threeBetSub },
+    { label: '④Fold to 3-Bet %', value: f3bPct, sub: f3bSub },
+    { label: '⑤C-Bet %', value: cbetPct, sub: cbetSub },
+    { label: '⑥Fold to C-Bet %', value: fcbPct, sub: fcbSub },
+    { label: '⑦WTSD %', value: wtsdPct, sub: wtsdSub },
+    { label: '⑧WSD (Win at SD) %', value: wsdPct, sub: wsdSub },
+    { label: '⑨ROI', value: roiVal, sub: ss.totalInvested > 0 ? `投資 ${ss.totalInvested}` : undefined, color: roiColor },
+    { label: '⑩Win Rate (BB/100)', value: winRateVal, sub: `${handsPlayed}ハンド`, color: winRateColor },
+  ]
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center overflow-y-auto py-4 px-3">
@@ -122,7 +185,7 @@ export function StatsScreen({ onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">統計・履歴</h2>
+          <h2 className="text-xl font-bold text-white">統計</h2>
           <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
@@ -136,7 +199,7 @@ export function StatsScreen({ onClose }: Props) {
               <PnLChart hands={hands} />
             </div>
 
-            {/* Summary stats */}
+            {/* Base summary stats */}
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {[
                 { label: '総ハンド数', value: `${total}` },
@@ -153,47 +216,17 @@ export function StatsScreen({ onClose }: Props) {
               ))}
             </div>
 
-            {/* Hand history table */}
-            {hands.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="text-white/40 uppercase tracking-wider text-[9px]">
-                      <th className="text-left pb-1 pr-2">#</th>
-                      <th className="text-left pb-1 pr-2">ホールカード</th>
-                      <th className="text-left pb-1 pr-2">役</th>
-                      <th className="text-right pb-1">損益</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...hands].reverse().map((h) => (
-                      <tr key={h.id} className="border-t border-white/5 hover:bg-white/5">
-                        <td className="py-1 pr-2 text-white/40">{h.handNumber}</td>
-                        <td className="py-1 pr-2">
-                          <span className="flex gap-1">
-                            {h.holeCards.map((c, i) => (
-                              <span key={i} className={`font-bold ${SUIT_COLOR[c.suit]}`}>
-                                {c.rank}{SUIT_SYM[c.suit]}
-                              </span>
-                            ))}
-                          </span>
-                        </td>
-                        <td className="py-1 pr-2 text-white/70">
-                          {h.handRank ? HAND_RANK_JA[h.handRank] : '—'}
-                        </td>
-                        <td className={`py-1 text-right font-mono font-bold ${h.netChips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {h.netChips >= 0 ? '+' : ''}{h.netChips}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* 10 advanced metrics — 2-column card grid */}
+            <div>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">アドバンスト指標（このセッション）</p>
+              <div className="grid grid-cols-2 gap-2">
+                {advancedMetrics.map((m) => (
+                  <StatCard key={m.label} {...m} />
+                ))}
               </div>
-            ) : (
-              <p className="text-white/30 text-center py-4 text-sm">ハンド履歴がありません</p>
-            )}
+            </div>
 
-            {/* Clear button — always visible so stale data can be reset */}
+            {/* Clear button */}
             <button
               onClick={handleClear}
               className="self-end text-xs text-white/30 hover:text-red-400 transition-colors"
