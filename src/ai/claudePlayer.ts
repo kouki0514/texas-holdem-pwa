@@ -578,7 +578,7 @@ function analyzeBoardRangeAdvantage(
 // System prompt builder
 // ──────────────────────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(state: GameState, player: Player): string {
+function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'en' = 'ja'): string {
   const holeCards = player.holeCards as [Card, Card]
   const toCall = Math.max(0, state.currentBet - player.currentBet)
   const canCheck = toCall === 0
@@ -803,14 +803,17 @@ Respond with ONLY a JSON object — no markdown, no extra text:
 {
   "action": "fold" | "check" | "call" | "raise" | "all-in",
   "amount": <integer, REQUIRED when action is "raise" — total bet size this street, use sizing guide above>,
-  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, range advantage, sizing choice, then explain decision in Japanese>"
+  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, range advantage, sizing choice, then explain your decision>"
 }
 
 Constraints:
 - "check" only valid when toCall === 0
 - "raise" amount must be ≥ ${minRaiseTotal} and ≤ ${player.chips + player.currentBet}
 - If you cannot afford a raise, use "all-in" instead
-- reasoning must be written in Japanese`
+${language === 'ja'
+  ? `- You MUST write the reasoning field in Japanese only. Do NOT use English in the reasoning field. Poker terms should be written in katakana (e.g. リバー、コール、レイズ、フロップ、ターン、チェック、フォールド、ブラフ、バリュー、ポット).`
+  : `- You MUST write the reasoning field in English only. Do NOT use Japanese in the reasoning field.`
+}`
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -902,9 +905,10 @@ const CLAUDE_TIMEOUT_MS = 15_000
 export async function claudeDecideAction(
   state: GameState,
   player: Player,
+  language: 'ja' | 'en' = 'ja',
 ): Promise<ClaudeDecision> {
   const client = getClient()
-  const systemPrompt = buildSystemPrompt(state, player)
+  const systemPrompt = buildSystemPrompt(state, player, language)
 
   const apiCall = (async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -921,7 +925,7 @@ export async function claudeDecideAction(
       messages: [
         {
           role: 'user',
-          content: 'アクションを選んでください。',
+          content: language === 'ja' ? 'アクションを選んでください。' : 'Please choose your action.',
         },
       ],
     })

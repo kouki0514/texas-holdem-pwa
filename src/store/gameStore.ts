@@ -112,6 +112,8 @@ interface GameStore extends GameState {
   _stealOppRecorded: boolean
   /** Initial chip count per player (set once at game start): playerId → chips */
   initialStackMap: Record<string, number>
+  /** UI / reasoning language */
+  language: 'ja' | 'en'
 
   initGame: (players: Player[]) => void
   startNewHand: () => void
@@ -124,6 +126,7 @@ interface GameStore extends GameState {
   clearReasoning: () => void
   quitGame: () => void
   addOnChips: (playerIds: string[]) => void
+  setLanguage: (lang: 'ja' | 'en') => void
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -157,6 +160,7 @@ export const useGameStore = create<GameStore>()(
     _handPersisted: false,
     handNetChipsMap: {},
     initialStackMap: {},
+    language: 'ja' as const,
     _humanPfr: false,
     _humanCheckedThisStreet: false,
     _checkRaiseOppRecorded: false,
@@ -617,7 +621,7 @@ export const useGameStore = create<GameStore>()(
         // ── Claude path (async) ────────────────────────────────────────────
         set((s) => { s.claudeThinking = true })
 
-        claudeDecideAction(state, player)
+        claudeDecideAction(state, player, state.language)
           .then((decision) => {
             const entry: ReasoningEntry = buildReasoningEntry(state, player, decision.action, decision.amount, decision.reasoning)
             set((s) => {
@@ -674,6 +678,10 @@ export const useGameStore = create<GameStore>()(
         s.latestReasoning = {}
         s.reasoningLog = []
       })
+    },
+
+    setLanguage(lang) {
+      set((s) => { s.language = lang })
     },
 
     addOnChips(playerIds) {

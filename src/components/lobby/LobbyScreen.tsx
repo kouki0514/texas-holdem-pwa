@@ -42,6 +42,8 @@ export function LobbyScreen() {
   const [aiCount, setAiCount] = useState(3)
   const [startingStack, setStartingStack] = useState(1000)
   const { initGame, startNewHand } = useGameStore()
+  const language    = useGameStore((s) => s.language)
+  const setLanguage = useGameStore((s) => s.setLanguage)
 
   const handleStart = () => {
     const players = createPlayers(name, aiCount, startingStack)
@@ -88,6 +90,26 @@ export function LobbyScreen() {
               {stack.toLocaleString()}
             </button>
           ))}
+        </div>
+
+        {/* Language toggle */}
+        <div className="flex flex-col gap-1">
+          <label className="text-white font-medium">AI Reasoning Language</label>
+          <div className="flex rounded-lg overflow-hidden border border-white/20">
+            {(['ja', 'en'] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setLanguage(lang)}
+                className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                  language === lang
+                    ? 'bg-green-500 text-white'
+                    : 'bg-white/10 text-white/60 hover:bg-white/20'
+                }`}
+              >
+                {lang === 'ja' ? '日本語' : 'English'}
+              </button>
+            ))}
+          </div>
         </div>
 
         <Button size="lg" onClick={handleStart} className="mt-2">
