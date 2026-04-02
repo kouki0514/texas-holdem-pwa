@@ -254,18 +254,133 @@ function classifyMadeHand(holeCards: [Card, Card], communityCards: Card[]): stri
 // Monte Carlo equity estimator
 // ──────────────────────────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Range-weighted hole card sampling helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute the Tier-weight distribution for opponent hole cards given betRatio.
+ * betRatio = opponentBet / potBeforeBet (0 = check/no bet).
+ *
+ * Polarised bet sizing logic:
+ *   - Check (0)          : uniform across all tiers
+ *   - Small  (≤0.4)      : balanced range — Tier1+2 20%, Tier3+4 50%, Tier5 30%
+ *   - Medium (≤0.75)     : polarised  — Tier1+2 40%, Tier3 30%, Tier5 30%
+ *   - Large  (>0.75)     : strongly polarised — Tier1 50%, Tier2 10%, Tier5 40%
+ *
+ * Returns weights [w1, w2, w3, w4, w5] that sum to 1.
+ */
+function betRatioToTierWeights(betRatio: number): [number, number, number, number, number] {
+  if (betRatio <= 0) {
+    // Check — uniform
+    return [0.20, 0.20, 0.20, 0.20, 0.20]
+  } else if (betRatio <= 0.4) {
+    // Small bet — balanced
+    return [0.10, 0.10, 0.25, 0.25, 0.30]
+  } else if (betRatio <= 0.75) {
+    // Medium bet — polarised
+    return [0.20, 0.20, 0.30, 0.00, 0.30]
+  } else {
+    // Large / overbet — strongly polarised
+    return [0.50, 0.10, 0.00, 0.00, 0.40]
+  }
+}
+
+/**
+ * Classify a pair of cards into a preflop Tier (1=premium … 5=weak).
+ * Mirrors the logic in classifyHoleCards but returns a number.
+ */
+function getCardTier(a: Card, b: Card): 1 | 2 | 3 | 4 | 5 {
+  const rankVal: Record<string, number> = {
+    A: 14, K: 13, Q: 12, J: 11, '10': 10,
+    '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2,
+  }
+  const hi = Math.max(rankVal[a.rank], rankVal[b.rank])
+  const lo = Math.min(rankVal[a.rank], rankVal[b.rank])
+  const isPair = hi === lo
+  const gap = hi - lo
+  const suited = a.suit === b.suit
+
+  // Tier 1: Premium
+  if (isPair && hi >= 10) return 1
+  if (!isPair && hi === 14 && lo >= 12) return 1
+  // Tier 2: Strong
+  if (isPair && hi >= 7) return 2
+  if (!isPair && hi === 14 && lo >= 9) return 2
+  if (!isPair && hi === 13 && lo >= 11) return 2
+  if (!isPair && suited && hi >= 11 && gap <= 1) return 2
+  // Tier 3: Playable
+  if (isPair) return 3
+  if (suited && gap <= 2 && hi >= 8) return 3
+  if (!isPair && hi >= 10 && lo >= 9) return 3
+  // Tier 4: Speculative
+  if (suited && gap <= 3) return 4
+  if (!isPair && hi >= 10 && gap <= 3) return 4
+  // Tier 5: Weak
+  return 5
+}
+
+/**
+ * Sample one opponent hole card pair from the remaining deck using
+ * tier-based weighted rejection sampling.
+ *
+ * @param deck        Shuffled remaining deck (already has board + other opp cards removed).
+ * @param startIdx    First index in deck available for this opponent (2 consecutive cards used).
+ * @param tierWeights [w1..w5] probability each tier is accepted.
+ * @param maxAttempts Stop after this many swaps to avoid infinite loops.
+ * @returns The chosen [Card, Card] pair (guaranteed to be the cards at startIdx, startIdx+1
+ *          after this function finishes).
+ */
+function sampleRangeWeightedPair(
+  deck: Card[],
+  startIdx: number,
+  deckEnd: number,
+  tierWeights: [number, number, number, number, number],
+  maxAttempts = 20,
+): [Card, Card] {
+  // Try to find a pair whose tier passes a probabilistic accept/reject test.
+  // We swap candidates into position [startIdx, startIdx+1] on acceptance.
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Pick two random positions from [startIdx, deckEnd)
+    const i1 = startIdx + Math.floor(Math.random() * (deckEnd - startIdx))
+    let i2 = startIdx + Math.floor(Math.random() * (deckEnd - startIdx - 1))
+    if (i2 >= i1) i2++  // ensure i1 !== i2
+
+    if (i2 < startIdx || i2 >= deckEnd) continue
+
+    const tier = getCardTier(deck[i1], deck[i2])
+    const weight = tierWeights[tier - 1]
+
+    if (Math.random() < weight / 0.5) {
+      // Accept: swap into position
+      ;[deck[startIdx],     deck[i1]] = [deck[i1],     deck[startIdx]]
+      ;[deck[startIdx + 1], deck[i2]] = [deck[i2], deck[startIdx + 1]]
+      return [deck[startIdx], deck[startIdx + 1]]
+    }
+  }
+  // Fallback: use whatever is already at startIdx (pure random)
+  return [deck[startIdx], deck[startIdx + 1]]
+}
+
 /**
  * Estimate win equity via Monte Carlo simulation.
  * Randomly completes unknown community cards and opponent hole cards,
  * then evaluates who wins. Returns win rate [0, 1].
+ *
+ * @param opponentBetRatio  Opponent's bet / pot-before-bet (0 = check/no bet).
+ *   Used to bias opponent hole card sampling toward plausible hand ranges:
+ *   large bets → polarised (nuts or bluff), small bets → balanced range.
  */
 function estimateEquity(
   holeCards: [Card, Card],
   communityCards: Card[],
   numOpponents: number,
   iterations = 500,
+  opponentBetRatio = 0,
 ): number {
   if (numOpponents <= 0) return 1
+
+  const tierWeights = betRatioToTierWeights(opponentBetRatio)
 
   // Build the set of known cards to exclude from the deck
   const knownKeys = new Set<string>([
@@ -280,13 +395,15 @@ function estimateEquity(
   let validTrials = 0
 
   for (let i = 0; i < iterations; i++) {
-    // Fisher-Yates partial shuffle — only shuffle as many cards as we need
-    const cardsNeeded = boardNeeded + numOpponents * 2
+    // Fisher-Yates partial shuffle for board cards only
+    const boardCards = boardNeeded
     const deck = [...fullDeck]
-    for (let j = 0; j < cardsNeeded && j < deck.length; j++) {
+    for (let j = 0; j < boardCards && j < deck.length; j++) {
       const r = j + Math.floor(Math.random() * (deck.length - j))
       ;[deck[j], deck[r]] = [deck[r], deck[j]]
     }
+
+    const cardsNeeded = boardNeeded + numOpponents * 2
     if (deck.length < cardsNeeded) continue
 
     // Complete community cards
@@ -295,7 +412,7 @@ function estimateEquity(
       ...deck.slice(0, boardNeeded),
     ]
 
-    // Deal opponent hole cards
+    // Deal opponent hole cards using range-weighted sampling
     let heroWins = true
     let heroResult: ReturnType<typeof evaluateHand> | null = null
     try {
@@ -305,10 +422,8 @@ function estimateEquity(
     }
 
     for (let opp = 0; opp < numOpponents; opp++) {
-      const oppHole: [Card, Card] = [
-        deck[boardNeeded + opp * 2],
-        deck[boardNeeded + opp * 2 + 1],
-      ]
+      const oppStart = boardNeeded + opp * 2
+      const oppHole = sampleRangeWeightedPair(deck, oppStart, deck.length, tierWeights)
       try {
         const oppResult = evaluateHand(oppHole, board)
         if (compareHandResults(oppResult, heroResult!) > 0) {
@@ -590,15 +705,30 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const numOpponents = activeOpponents.length
   const isMultiway = numOpponents >= 2
 
-  // ── Monte Carlo equity ───────────────────────────────────────────────────────
-  const equity = estimateEquity(holeCards, state.communityCards, numOpponents, 500)
-  const equityPct = `${(equity * 100).toFixed(1)}%`
-
   // ── Pot odds & required equity ──────────────────────────────────────────────
   const potOdds = toCall > 0 ? toCall / (totalPot + toCall) : 0
   const potOddsStr = toCall > 0
     ? `${(potOdds * 100).toFixed(1)}% (call ${toCall} into pot-after-call ${totalPot + toCall})`
     : 'N/A (no call required)'
+
+  // ── Opponent bet sizing relative to pot ─────────────────────────────────────
+  // potBeforeBet = pot before opponent's bet was made.
+  // totalPot already includes the opponent's currentBet, so subtract it to get pre-bet pot.
+  let betSizeNote = 'N/A'
+  let opponentBetRatio = 0
+  if (state.currentBet > 0 && totalPot > 0) {
+    const potBeforeBet = Math.max(1, totalPot - state.currentBet)
+    opponentBetRatio = toCall / potBeforeBet
+    const ratio = state.currentBet / potBeforeBet
+    if (ratio <= 0.4) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — small bet: wide continuing range, re-raise bluffs viable`
+    else if (ratio <= 0.6) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — half-pot: balanced range; need ~25% equity to call`
+    else if (ratio <= 0.85) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — 2/3 pot: polarised range; need ~32% equity`
+    else betSizeNote = `${(ratio * 100).toFixed(0)}% pot — pot-size+: very polarised; need ~40%+ equity, fold marginal hands`
+  }
+
+  // ── Monte Carlo equity (uses opponentBetRatio for range-weighted sampling) ──
+  const equity = estimateEquity(holeCards, state.communityCards, numOpponents, 500, opponentBetRatio)
+  const equityPct = `${(equity * 100).toFixed(1)}%`
 
   // ── SPR (Stack-to-Pot Ratio) ─────────────────────────────────────────────────
   const effectiveStack = Math.min(
@@ -610,19 +740,6 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   if (spr <= 3) sprNote = `${spr.toFixed(1)} — LOW: commit with top pair+, avoid fancy play`
   else if (spr <= 10) sprNote = `${spr.toFixed(1)} — MEDIUM: prefer sets/two-pair+ to stack off; draws need good odds`
   else sprNote = `${spr.toFixed(1)} — HIGH: implied odds matter; speculative hands gain value`
-
-  // ── Opponent bet sizing relative to pot ─────────────────────────────────────
-  // potBeforeBet = pot before opponent's bet was made.
-  // totalPot already includes the opponent's currentBet, so subtract it to get pre-bet pot.
-  let betSizeNote = 'N/A'
-  if (state.currentBet > 0 && totalPot > 0) {
-    const potBeforeBet = Math.max(1, totalPot - state.currentBet)
-    const ratio = state.currentBet / potBeforeBet
-    if (ratio <= 0.4) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — small bet: wide continuing range, re-raise bluffs viable`
-    else if (ratio <= 0.6) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — half-pot: balanced range; need ~25% equity to call`
-    else if (ratio <= 0.85) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — 2/3 pot: polarised range; need ~32% equity`
-    else betSizeNote = `${(ratio * 100).toFixed(0)}% pot — pot-size+: very polarised; need ~40%+ equity, fold marginal hands`
-  }
 
   // ── Position-based strategy note ────────────────────────────────────────────
   const posLower = position.toLowerCase()
