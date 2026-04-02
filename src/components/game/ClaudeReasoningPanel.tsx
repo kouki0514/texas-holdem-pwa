@@ -9,6 +9,7 @@ const ACTION_STYLE: { [key: string]: string } = {
   check:   'bg-gray-700/60  text-gray-300  border-gray-500',
   call:    'bg-blue-900/60  text-blue-300  border-blue-700',
   raise:   'bg-yellow-900/60 text-yellow-300 border-yellow-700',
+  bet:     'bg-orange-900/60 text-orange-300 border-orange-700',
   'all-in':'bg-purple-900/60 text-purple-300 border-purple-700',
   sb:      'bg-gray-700/60  text-gray-200  border-gray-400',
   bb:      'bg-blue-900/60  text-blue-200  border-blue-600',
@@ -114,7 +115,7 @@ function TimelineCard({ entry }: { entry: ReasoningEntry }) {
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
   const showChip   = entry.amount != null && entry.amount > 0 &&
-    (entry.action === 'raise' || entry.action === 'all-in' || entry.action === 'call' ||
+    (entry.action === 'raise' || entry.action === 'bet' || entry.action === 'all-in' || entry.action === 'call' ||
      (entry.action as string) === 'sb' || (entry.action as string) === 'bb')
 
   const containerCls = human

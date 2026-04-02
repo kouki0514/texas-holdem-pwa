@@ -612,9 +612,12 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   else sprNote = `${spr.toFixed(1)} — HIGH: implied odds matter; speculative hands gain value`
 
   // ── Opponent bet sizing relative to pot ─────────────────────────────────────
+  // potBeforeBet = pot before opponent's bet was made.
+  // totalPot already includes the opponent's currentBet, so subtract it to get pre-bet pot.
   let betSizeNote = 'N/A'
   if (state.currentBet > 0 && totalPot > 0) {
-    const ratio = state.currentBet / totalPot
+    const potBeforeBet = Math.max(1, totalPot - state.currentBet)
+    const ratio = state.currentBet / potBeforeBet
     if (ratio <= 0.4) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — small bet: wide continuing range, re-raise bluffs viable`
     else if (ratio <= 0.6) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — half-pot: balanced range; need ~25% equity to call`
     else if (ratio <= 0.85) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — 2/3 pot: polarised range; need ~32% equity`
