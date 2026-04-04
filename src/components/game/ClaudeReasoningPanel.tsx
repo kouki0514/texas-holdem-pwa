@@ -105,7 +105,8 @@ function BoardCards({ community }: { community: Card[] }) {
 }
 
 // タイムラインカード（AI・人間共通）
-// isHuman: reasoning==='' (human) or '(rule-based)' (rule AI)
+// reasoning==='' はhuman(playerAction)またはルールベースAIプリフロップ。
+// どちらもreasoningブロックを非表示にするため、同じ判定で問題ない。
 function isHumanEntry(e: ReasoningEntry) { return e.reasoning === '' }
 
 function TimelineCard({ entry }: { entry: ReasoningEntry }) {

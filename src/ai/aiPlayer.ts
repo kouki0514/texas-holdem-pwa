@@ -404,9 +404,67 @@ function preflopAction(
 // ポストフロップ メイン
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Postflop reasoning generator ─────────────────────────────────────────────
+
+function handTierLabel(eq: number): string {
+  if (eq > 0.75) return '強いメイドハンド'
+  if (eq > 0.55) return 'トップペア以上'
+  if (eq > 0.40) return 'ミドル〜ボトムペア'
+  if (eq > 0.25) return 'ドロー/弱いハンド'
+  return 'ブラフ域のウィークハンド'
+}
+
+function streetLabel(street: string): string {
+  if (street === 'flop') return 'フロップ'
+  if (street === 'turn') return 'ターン'
+  if (street === 'river') return 'リバー'
+  return street
+}
+
+function buildPostflopReasoning(
+  action: ActionType,
+  amount: number | undefined,
+  eq: number,
+  potSize: number,
+  toCall: number,
+  ip: boolean,
+  aggressor: boolean,
+  street: string,
+  isBluff: boolean,
+): string {
+  const sl = streetLabel(street)
+  const tierLabel = handTierLabel(eq)
+  const eqPct = `${(eq * 100).toFixed(0)}%`
+  const posLabel = ip ? 'IP(有利ポジション)' : 'OOP(不利ポジション)'
+  const needed = toCall > 0 ? requiredEquity(toCall, potSize) : 0
+  const neededPct = `${(needed * 100).toFixed(0)}%`
+
+  switch (action) {
+    case 'raise': {
+      if (isBluff) {
+        return `${sl}で${posLabel}からブラフベット。エクイティ${eqPct}でウィークハンドだが、フォールドエクイティを利用して攻める。ポットを取れる可能性がある。`
+      }
+      if (aggressor && street === 'flop') {
+        return `${sl}でコンティニュエーションベット。プリフロップアグレッサーとして${eqPct}のエクイティを持ち${posLabel}からCベットで圧力をかける。`
+      }
+      return `${sl}で${tierLabel}(エクイティ${eqPct})。${posLabel}からバリューベット${amount != null ? `(${amount})` : ''}でポットを構築する。`
+    }
+    case 'all-in':
+      return `${sl}で${tierLabel}(エクイティ${eqPct})。スタックを考慮してオールインで最大バリューを取る。`
+    case 'call':
+      return `${sl}で${tierLabel}(エクイティ${eqPct})。ポットオッズ必要エクイティ${neededPct}に対してエクイティが上回るためコール。`
+    case 'check':
+      return `${sl}で${tierLabel}(エクイティ${eqPct})。${posLabel}からチェックしてフリーカードを取るかチェックレイズを狙う。`
+    case 'fold':
+      return `${sl}で${tierLabel}(エクイティ${eqPct})。ポットオッズ必要エクイティ${neededPct}を下回るためフォールド。`
+    default:
+      return `${sl}でエクイティ${eqPct}を元に判断。`
+  }
+}
+
 function postflopAction(
   state: GameState, player: Player, difficulty: AiDifficulty
-): { action: ActionType; amount?: number } {
+): { action: ActionType; amount?: number; reasoning: string } {
   const toCall   = Math.max(0, state.currentBet - player.currentBet)
   const canCheck = toCall === 0
   const potSize  = state.pots.reduce((s, p) => s + p.amount, 0)
@@ -418,6 +476,12 @@ function postflopAction(
   const aggressor = isPreflopAggressor(player, state)
 
   const aggMult = { 'easy': 0.7, 'medium': 1.0, 'hard': 1.25 }[difficulty]
+
+  const makeResult = (action: ActionType, amount?: number, isBluff = false) => ({
+    action,
+    ...(amount != null ? { amount } : {}),
+    reasoning: buildPostflopReasoning(action, amount, eq, potSize, toCall, ip, aggressor, street, isBluff),
+  })
 
   if (canCheck) {
     const isCbet = aggressor && street === 'flop' && canCheck
@@ -439,19 +503,20 @@ function postflopAction(
         : (0.25 + Math.random() * 0.20)
       const streetMult = street === 'flop' ? 1.0 : street === 'turn' ? 1.15 : 1.3
       const betAmount = Math.max(Math.round(potSize * potFrac * streetMult), state.minRaise)
-      if (player.chips >= betAmount) return { action: 'raise', amount: state.currentBet + betAmount }
-      return { action: 'all-in' }
+      if (player.chips >= betAmount) return makeResult('raise', state.currentBet + betAmount, bluff && !shouldBet)
+      return makeResult('all-in')
     }
-    return { action: 'check' }
+    return makeResult('check')
   }
 
   const needed = requiredEquity(toCall, potSize)
-  if (eq < needed * 0.75) return { action: 'fold' }
+  if (eq < needed * 0.75) return makeResult('fold')
 
   const raiseThreshold = ip ? 0.55 * aggMult : 0.65 * aggMult
   const bluffRaiseFreq = difficulty === 'hard' ? 0.10 : difficulty === 'medium' ? 0.05 : 0.02
+  const isBluffRaise = Math.random() < bluffRaiseFreq && eq < 0.25
 
-  if (eq > raiseThreshold || (Math.random() < bluffRaiseFreq && eq < 0.25)) {
+  if (eq > raiseThreshold || isBluffRaise) {
     const potFrac = eq > 0.70
       ? (0.65 + Math.random() * 0.35)
       : eq > 0.45
@@ -459,16 +524,16 @@ function postflopAction(
       : (0.30 + Math.random() * 0.20)
     const streetMult = street === 'flop' ? 1.0 : street === 'turn' ? 1.15 : 1.3
     const raiseAmount = Math.round(state.currentBet * 2.5 + potSize * potFrac * streetMult)
-    if (player.chips >= raiseAmount - player.currentBet) return { action: 'raise', amount: raiseAmount }
-    return { action: 'all-in' }
+    if (player.chips >= raiseAmount - player.currentBet) return makeResult('raise', raiseAmount, isBluffRaise)
+    return makeResult('all-in')
   }
 
   if (eq >= needed) {
-    if (player.chips >= toCall) return { action: 'call' }
-    return { action: 'all-in' }
+    if (player.chips >= toCall) return makeResult('call')
+    return makeResult('all-in')
   }
 
-  return { action: 'fold' }
+  return makeResult('fold')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -479,10 +544,10 @@ export function decideAction(
   state: GameState,
   player: Player,
   difficulty: AiDifficulty = 'medium',
-): { action: ActionType; amount?: number } {
+): { action: ActionType; amount?: number; reasoning: string } {
   if (state.phase === 'preflop') {
     const result = preflopAction(state, player, difficulty)
-    if (result) return result
+    if (result) return { ...result, reasoning: '' }
   }
   return postflopAction(state, player, difficulty)
 }

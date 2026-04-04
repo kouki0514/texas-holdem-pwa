@@ -611,7 +611,7 @@ export const useGameStore = create<GameStore>()(
           .catch((err) => {
             console.warn('[Claude] error, falling back to rule-based AI:', err)
             const fallback = decideAction(state, player, state.aiDifficulty)
-            const fallbackEntry: ReasoningEntry = buildReasoningEntry(state, player, fallback.action, fallback.amount, '(rule-based)')
+            const fallbackEntry: ReasoningEntry = buildReasoningEntry(state, player, fallback.action, fallback.amount, fallback.reasoning)
             set((s) => {
               s.claudeThinking = false
               s.latestReasoning[player.id] = fallbackEntry
@@ -624,8 +624,8 @@ export const useGameStore = create<GameStore>()(
           })
       } else {
         // ── Rule-based path (sync) ─────────────────────────────────────────
-        const { action, amount } = decideAction(state, player, state.aiDifficulty)
-        const entry: ReasoningEntry = buildReasoningEntry(state, player, action, amount, '(rule-based)')
+        const { action, amount, reasoning } = decideAction(state, player, state.aiDifficulty)
+        const entry: ReasoningEntry = buildReasoningEntry(state, player, action, amount, reasoning)
         set((s) => {
           s.latestReasoning[player.id] = entry
           s.reasoningLog.push(entry)
