@@ -12,6 +12,7 @@ import { useSoundEffects } from '@/hooks/useSoundEffects'
 
 export function GameScreen() {
   const { phase, communityCards, players, pots, humanPlayer, startNewHand } = useGame()
+  const currentBet = useGameStore((s) => s.currentBet)
   const dealerIndex    = useGameStore((s) => s.dealerIndex)
   const winners        = useGameStore((s) => s.winners)
   const claudeThinking = useGameStore((s) => s.claudeThinking)
@@ -124,7 +125,7 @@ export function GameScreen() {
         <div className="w-full max-w-xl py-5 px-6
                         bg-felt rounded-[48px] border-4 border-felt-light/30
                         shadow-2xl flex items-center justify-center">
-          <GameBoard phase={phase} communityCards={communityCards} pots={pots} />
+          <GameBoard phase={phase} communityCards={communityCards} pots={pots} currentBet={currentBet} />
         </div>
       </section>
 

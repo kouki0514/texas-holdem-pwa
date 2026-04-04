@@ -5,6 +5,7 @@ interface Props {
   phase: GamePhase
   communityCards: Card[]
   pots: Pot[]
+  currentBet: number
 }
 
 const PHASE_LABEL: Partial<Record<GamePhase, string>> = {
@@ -15,8 +16,14 @@ const PHASE_LABEL: Partial<Record<GamePhase, string>> = {
   showdown:'SHOWDOWN',
 }
 
-export function GameBoard({ phase, communityCards, pots }: Props) {
+export function GameBoard({ phase, communityCards, pots, currentBet }: Props) {
   const totalPot = pots.reduce((s, p) => s + p.amount, 0)
+  // When there is an outstanding bet, show "preBetPot + bet" instead of the merged total.
+  // totalPot already includes currentBet, so preBetPot = totalPot - currentBet.
+  const preBetPot = currentBet > 0 ? totalPot - currentBet : 0
+  const potLabel = currentBet > 0
+    ? `Pot: ${preBetPot.toLocaleString()} + ${currentBet.toLocaleString()}`
+    : `Pot: ${totalPot.toLocaleString()}`
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -44,7 +51,7 @@ export function GameBoard({ phase, communityCards, pots }: Props) {
         <div className="flex items-center gap-2 bg-black/40 px-4 py-1.5 rounded-full border border-white/10">
           <span className="text-yellow-400 text-sm">🪙</span>
           <span className="text-white font-semibold text-sm">
-            Pot: {totalPot.toLocaleString()}
+            {potLabel}
           </span>
           {pots.length > 1 && (
             <span className="text-white/50 text-xs">
