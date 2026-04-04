@@ -107,11 +107,9 @@ function BoardCards({ community }: { community: Card[] }) {
 // タイムラインカード（AI・人間共通）
 // isHuman: reasoning==='' (human) or '(rule-based)' (rule AI)
 function isHumanEntry(e: ReasoningEntry) { return e.reasoning === '' }
-function isRuleAi(e: ReasoningEntry)     { return e.reasoning === '(rule-based)' }
 
 function TimelineCard({ entry }: { entry: ReasoningEntry }) {
   const human   = isHumanEntry(entry)
-  const ruleAi  = isRuleAi(entry)
   const badgeStyle = ACTION_STYLE[entry.action] ?? ACTION_STYLE.check
   const amtLabel   = entry.amount != null ? ` ${entry.amount}` : ''
   const showChip   = entry.amount != null && entry.amount > 0 &&
