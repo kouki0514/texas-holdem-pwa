@@ -945,7 +945,7 @@ Respond with ONLY a JSON object — no markdown, no extra text:
 {
   "action": "fold" | "check" | "call" | "raise" | "all-in",
   "amount": <integer, REQUIRED when action is "raise" — total bet size this street, use sizing guide above>,
-  "reasoning": "<2-3 sentences: cite equity%, pot odds, board texture, range advantage, sizing choice, then explain your decision>"
+  "reasoning": "REQUIRED: You MUST always provide reasoning. Never leave reasoning empty or null. Minimum 2 sentences explaining: (1) hand strength and equity, (2) the strategic reason for your action choice."
 }
 
 Constraints:
@@ -969,12 +969,16 @@ function sanitise(
   raw: RawDecision,
   state: GameState,
   player: Player,
+  language: 'ja' | 'en' = 'ja',
 ): ClaudeDecision {
   const toCall = Math.max(0, state.currentBet - player.currentBet)
   const canCheck = toCall === 0
   const minRaiseTotal = state.currentBet + state.minRaise
   const maxBet = player.chips + player.currentBet
-  const reasoning = raw.reasoning?.trim() || '最善手を選択しました。'
+  const fallbackReasoning = language === 'en'
+    ? 'Selected the best available action based on hand strength and pot odds.'
+    : '手の強さとポットオッズに基づいて最善のアクションを選択しました。'
+  const reasoning = raw.reasoning?.trim() || fallbackReasoning
 
   // Validate action
   const validActions: ActionType[] = ['fold', 'check', 'call', 'raise', 'all-in']
@@ -1081,7 +1085,7 @@ export async function claudeDecideAction(
       throw new Error('No text content in Claude response')
     }
 
-    return sanitise(extractJson(textBlock.text!), state, player)
+    return sanitise(extractJson(textBlock.text!), state, player, language)
   })()
 
   const timeout = new Promise<never>((_, reject) =>
