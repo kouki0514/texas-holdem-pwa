@@ -1,0 +1,27 @@
+6-Max Preflop CFR+ Solver
+  Iterations     : 500,000
+  Equity samples : 100 per pair
+  Output         : /home/kouki/texas-holdem-pwa/scripts/preflop_strategy.json
+
+Precomputing 169x169 = 28,561 equity pairs (100 samples each)...
+  3,380/28,561 (12%)  113.5s
+  6,760/28,561 (24%)  2114.7s
+  10,140/28,561 (36%)  2190.0s
+  13,520/28,561 (47%)  2252.8s
+  16,900/28,561 (59%)  2302.2s
+  20,280/28,561 (71%)  2339.0s
+  23,660/28,561 (83%)  2362.7s
+  27,040/28,561 (95%)  2375.5s
+  28,561/28,561 (100%)  2376.5s
+Equity table ready (28,561 entries)  2376.5s
+
+Running CFR+...
+  iter  100,000 / 500,000  15s elapsed  ETA 60s  50,416 infosets
+  iter  200,000 / 500,000  28s elapsed  ETA 42s  53,652 infosets
+  iter  300,000 / 500,000  41s elapsed  ETA 27s  54,712 infosets
+  iter  400,000 / 500,000  53s elapsed  ETA 13s  55,396 infosets
+  iter  500,000 / 500,000  65s elapsed  ETA 0s  55,840 infosets
+CFR+ done in 65.0s — 55,840 infosets
+
+Exporting strategy...
+Wrote 55,840 entries → /home/kouki/texas-holdem-pwa/scripts/preflop_strategy.json

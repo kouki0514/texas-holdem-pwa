@@ -1,6 +1,9 @@
 import type { ActionType, GameState, Player, Card } from '@/game/types'
 import { rankToValue } from '@/game/deck'
 import { evaluateHand } from '@/game/handEvaluator'
+import cfrStrategyRaw from './preflop_strategy.json'
+
+const CFR_STRATEGY = cfrStrategyRaw as Record<string, { fold: number; call: number; raise: number }>
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
 
@@ -419,6 +422,70 @@ function get4betSize(raise3bet: number, potSize: number): number {
   return Math.round(Math.max(raise3bet * 2.2, potSize * 0.45))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CFR戦略参照
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** ホールカードを "AKs" / "72o" / "AA" 形式に変換 */
+function toHandKey(c1: Card, c2: Card): string {
+  const v1 = rankToValue(c1.rank)
+  const v2 = rankToValue(c2.rank)
+  const hi = v1 >= v2 ? c1 : c2
+  const lo = v1 >= v2 ? c2 : c1
+  const hiR = normalizeRank(hi.rank)
+  const loR = normalizeRank(lo.rank)
+  if (v1 === v2) return `${hiR}${loR}`
+  return `${hiR}${loR}${hi.suit === lo.suit ? 's' : 'o'}`
+}
+
+/**
+ * アクション履歴を "UTG_raise_HJ_fold_CO_call" 形式に変換する。
+ * SB/BBのポスト(blind post)はアクションとして含めない。
+ */
+function buildActionHistory(state: GameState): string {
+  const n = state.players.length
+  const parts: string[] = []
+  for (const a of state.actionHistory) {
+    // blind post は除外（金額がBB以下のcallはポスト扱いしない — ここでは action種別で除外）
+    if ((a.action as string) === 'sb' || (a.action as string) === 'bb') continue
+    const idx = state.players.findIndex(p => p.id === a.playerId)
+    if (idx === -1) continue
+    const pos = getPosition(idx, state.dealerIndex, n)
+    const act = a.action === 'all-in' ? 'raise' : a.action
+    parts.push(`${pos}_${act}`)
+  }
+  return parts.join('_')
+}
+
+/** CFR戦略テーブルを参照して混合戦略を返す。キー未発見時は null。*/
+function getCFRStrategy(
+  pos: string,
+  actionHistory: string,
+  handKey: string,
+): { fold: number; call: number; raise: number } | null {
+  const histPart = actionHistory.length > 0 ? actionHistory : 'NONE'
+  const key = `${pos}_${histPart}_${handKey}`
+  return CFR_STRATEGY[key] ?? null
+}
+
+/** CFR混合戦略からアクションをサンプリングする */
+function sampleCFRAction(
+  strat: { fold: number; call: number; raise: number },
+  canCheck: boolean,
+  canRaise: boolean,
+): 'fold' | 'call' | 'raise' {
+  // raiseが不可能な場合はfold/callに再正規化
+  const r = canRaise ? strat.raise : 0
+  const c = strat.call
+  const f = strat.fold
+  const total = f + c + r
+  if (total <= 0) return canCheck ? 'call' : 'fold'
+  const rnd = Math.random() * total
+  if (rnd < f) return 'fold'
+  if (rnd < f + c) return 'call'
+  return 'raise'
+}
+
 function applyDifficulty(signal: string, difficulty: AiDifficulty): string {
   if (difficulty === 'easy') {
     if (signal === 'R' && Math.random() < 0.20) return 'F'
@@ -446,6 +513,58 @@ function preflopAction(
   const bbSize = state.bigBlind
   const stackDepth = player.chips / bbSize
   const raiserPos = getRaiserPosition(state)
+
+  // ── CFR戦略テーブル参照 ──────────────────────────────────────────────────
+  const cards = player.holeCards
+  if (cards && cards.length >= 2 && cards[0] && cards[1]) {
+    const handKey = toHandKey(cards[0], cards[1])
+    const actionHist = buildActionHistory(state)
+    const cfrStrat = getCFRStrategy(myPos, actionHist, handKey)
+    if (cfrStrat !== null) {
+      // difficultyによるノイズ: easy/mediumは少しランダム性を加える
+      const noiseLevel = difficulty === 'easy' ? 0.25 : difficulty === 'medium' ? 0.10 : 0.0
+      const noisedStrat = noiseLevel > 0
+        ? {
+            fold:  cfrStrat.fold  * (1 - noiseLevel) + noiseLevel / 3,
+            call:  cfrStrat.call  * (1 - noiseLevel) + noiseLevel / 3,
+            raise: cfrStrat.raise * (1 - noiseLevel) + noiseLevel / 3,
+          }
+        : cfrStrat
+      const canRaise = raiseCount < 4
+      const sampled = sampleCFRAction(noisedStrat, canCheck, canRaise)
+
+      if (sampled === 'raise') {
+        // raiseサイズはルールベースのサイジングを流用
+        if (raiseCount === 0) {
+          const limperCount = countLimpers(state)
+          const raiseAmount = getOpenRaiseSize(myPos, bbSize, stackDepth, limperCount)
+          const totalBet = state.currentBet + raiseAmount
+          if (player.chips >= totalBet - player.currentBet) return { action: 'raise', amount: totalBet }
+          return { action: 'all-in' }
+        } else if (raiseCount === 1) {
+          const betSize = get3betSize(myPos, state.currentBet, potSize, bbSize)
+          if (player.chips >= betSize - player.currentBet) return { action: 'raise', amount: betSize }
+          return { action: 'all-in' }
+        } else if (raiseCount === 2) {
+          const betSize = get4betSize(state.currentBet, potSize)
+          if (player.chips <= betSize - player.currentBet || stackDepth < 25) return { action: 'all-in' }
+          return { action: 'raise', amount: betSize }
+        } else {
+          // 4bet以上 → オールイン
+          return { action: 'all-in' }
+        }
+      }
+      if (sampled === 'call') {
+        if (canCheck) return { action: 'check' }
+        if (player.chips >= toCall) return { action: 'call' }
+        return { action: 'all-in' }
+      }
+      // fold
+      if (canCheck) return { action: 'check' }
+      return { action: 'fold' }
+    }
+    // CFRキー未発見時はルールベースにフォールバック（以下処理）
+  }
 
   const limperCount = countLimpers(state)
   const isLimpedPot = hasLimper(state) && raiseCount === 0
