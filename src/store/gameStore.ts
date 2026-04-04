@@ -113,7 +113,7 @@ export const useGameStore = create<GameStore>()(
   immer((set, get) => ({
     ...createInitialState([]),
     aiDifficulty: 'medium',
-    claudeEnabled: false,
+    claudeEnabled: true,
     preflopClaude: false,
     claudeThinking: false,
     latestReasoning: {},
