@@ -66,6 +66,43 @@ export function GameScreen() {
   const opponents = players.filter((p) => !p.isHuman)
   const human     = humanPlayer ?? players[0]
 
+  // ── AI seat positions around the table ──────────────────────────────────────
+  // Positions are expressed as { top, left } percentages of the table container.
+  // Human is always BOTTOM-CENTER (outside the table). AIs are placed around the
+  // table oval. Values chosen so seats clear the rounded table edges.
+  //
+  // Coordinate origin = top-left of the table+seats wrapper.
+  // The table oval occupies roughly the vertical center of the wrapper.
+  //
+  // 1 AI  → top-center
+  // 2 AIs → left / right
+  // 3 AIs → left / top-center / right
+  // 4 AIs → top-left / top-center-left / top-center-right / top-right  (arc across top)
+  const AI_POSITIONS: Record<number, { top: string; left: string }[]> = {
+    1: [
+      { top: '2%',  left: '50%' },
+    ],
+    2: [
+      { top: '30%', left: '2%'  },
+      { top: '30%', left: '88%' },
+    ],
+    3: [
+      { top: '30%', left: '2%'  },
+      { top: '2%',  left: '50%' },
+      { top: '30%', left: '88%' },
+    ],
+    4: [
+      { top: '30%', left: '2%'  },
+      { top: '2%',  left: '25%' },
+      { top: '2%',  left: '65%' },
+      { top: '30%', left: '88%' },
+    ],
+  }
+  const aiPositions = AI_POSITIONS[opponents.length] ?? opponents.map((_, i) => ({
+    top: '2%',
+    left: `${(i + 1) * (100 / (opponents.length + 1))}%`,
+  }))
+
   return (
     <div className="flex flex-col w-screen h-screen bg-felt-dark overflow-hidden select-none">
 
@@ -106,26 +143,34 @@ export function GameScreen() {
         </div>
       </header>
 
-      {/* 2. Opponents */}
-      <section className="shrink-0 flex justify-around items-center flex-wrap
-                          gap-x-2 gap-y-1 px-3 pt-2 pb-1 min-h-[80px]">
-        {opponents.map((p) => (
-          <PlayerSeat
-            key={p.id}
-            player={p}
-            isDealer={players.indexOf(p) === dealerIndex}
-            size="sm"
-            lastAction={lastActionMap[p.id]}
-          />
-        ))}
-      </section>
+      {/* 2 + 3. Table area with AI seats absolutely positioned around it */}
+      <section className="flex-1 min-h-0 relative px-3 py-2">
+        {/* AI seats */}
+        {opponents.map((p, i) => {
+          const pos = aiPositions[i] ?? { top: '2%', left: '50%' }
+          return (
+            <div
+              key={p.id}
+              className="absolute -translate-x-1/2"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              <PlayerSeat
+                player={p}
+                isDealer={players.indexOf(p) === dealerIndex}
+                size="sm"
+                lastAction={lastActionMap[p.id]}
+              />
+            </div>
+          )
+        })}
 
-      {/* 3. Table */}
-      <section className="flex-1 min-h-0 max-h-[280px] flex items-center justify-center px-3 py-2">
-        <div className="w-full max-w-xl py-5 px-6
-                        bg-felt rounded-[48px] border-4 border-felt-light/30
-                        shadow-2xl flex items-center justify-center">
-          <GameBoard phase={phase} communityCards={communityCards} pots={pots} currentBet={currentBet} />
+        {/* Table oval — centered in the section */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-full max-w-xl py-5 px-6
+                          bg-felt rounded-[48px] border-4 border-felt-light/30
+                          shadow-2xl flex items-center justify-center pointer-events-auto">
+            <GameBoard phase={phase} communityCards={communityCards} pots={pots} currentBet={currentBet} />
+          </div>
         </div>
       </section>
 
