@@ -864,8 +864,10 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
     validActions.push(`call (cost: ${toCall} chips)`)
   }
   if (player.chips > toCall) {
+    // No prior bet this street → opening action is a "bet", not a "raise"
+    const raiseLabel = canCheck ? 'bet' : 'raise'
     validActions.push(
-      `raise (min total bet: ${minRaiseTotal}, max: ${player.chips + player.currentBet} chips)`,
+      `${raiseLabel} (min total bet: ${minRaiseTotal}, max: ${player.chips + player.currentBet} chips — use action "raise" in JSON)`,
     )
   }
   validActions.push(`all-in (push ${player.chips} chips)`)
@@ -948,9 +950,12 @@ Constraints:
 - "check" only valid when toCall === 0
 - "raise" amount must be ≥ ${minRaiseTotal} and ≤ ${player.chips + player.currentBet}
 - If you cannot afford a raise, use "all-in" instead
+- IMPORTANT: always use action "raise" in the JSON even when opening the betting (no prior bet). The display layer converts it to "bet" automatically.
 ${language === 'ja'
   ? `- You MUST write the reasoning field in Japanese only. Do NOT use English in the reasoning field. Poker terms should be written in katakana (e.g. リバー、コール、レイズ、フロップ、ターン、チェック、フォールド、ブラフ、バリュー、ポット).`
+    + (canCheck ? `\n- This is an opening bet situation (no prior bet this street). In your reasoning, say "ベット" (bet) NOT "レイズ" (raise) when describing your action.` : '')
   : `- You MUST write the reasoning field in English only. Do NOT use Japanese in the reasoning field.`
+    + (canCheck ? `\n- This is an opening bet situation (no prior bet this street). In your reasoning, say "bet" NOT "raise" when describing your action.` : '')
 }`
 }
 

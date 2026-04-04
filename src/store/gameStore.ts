@@ -363,12 +363,8 @@ export const useGameStore = create<GameStore>()(
 
       // Record human action into reasoningLog so it appears in the history timeline
       if (activePlayer?.isHuman) {
-        // If action is 'raise' but there is no prior bet this street (currentBet===0 or only BB posted),
-        // display it as 'bet' in the history timeline.
-        const isBetNotRaise = action === 'raise' && stateSnapshot.currentBet <= stateSnapshot.bigBlind
-        const displayAction: ActionType | 'bet' = isBetNotRaise ? 'bet' : action
         const humanEntry: ReasoningEntry = {
-          ...buildReasoningEntry(stateSnapshot as import('@/game/types').GameState, activePlayer, displayAction, amount, ''),
+          ...buildReasoningEntry(stateSnapshot as import('@/game/types').GameState, activePlayer, action, amount, ''),
           holeCards: humanHoleCards,
         }
         set((s) => {
@@ -732,10 +728,13 @@ export function buildReasoningEntry(
   reasoning: string,
 ): ReasoningEntry {
   const idx = state.players.findIndex((p) => p.id === player.id)
+  // Normalize 'raise' → 'bet' when there is no prior bet this street
+  const displayAction: ActionType | 'bet' =
+    action === 'raise' && state.currentBet <= state.bigBlind ? 'bet' : action
   return {
     playerId: player.id,
     playerName: player.name,
-    action,
+    action: displayAction,
     amount,
     reasoning,
     handNumber: state.handNumber,
