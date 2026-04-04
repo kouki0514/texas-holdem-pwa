@@ -152,7 +152,7 @@ function TimelineCard({ entry }: { entry: ReasoningEntry }) {
           </div>
         )}
       </div>
-      {!human && !ruleAi && entry.reasoning && (
+      {!human && entry.reasoning && (
         <p className="text-xs text-white/70 leading-relaxed">{entry.reasoning}</p>
       )}
     </div>
