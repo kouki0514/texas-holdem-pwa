@@ -76,12 +76,16 @@ export function GameScreen() {
   // Convention: angle 0° = right (3 o'clock), increases clockwise.
   //   top  = cy + ry * sin(angle)
   //   left = cx + rx * cos(angle)
-  const ARENA_W = 600
-  const ARENA_H = 420
-  const cx = ARENA_W / 2   // 300
-  const cy = ARENA_H / 2   // 210
-  const rx = 235
-  const ry = 158
+  const ARENA_W = 720
+  const ARENA_H = 520
+  const cx = ARENA_W / 2   // 360
+  const cy = ARENA_H / 2   // 260
+  // Seat orbit ellipse — intentionally larger than the table oval so seats never overlap the board
+  const rx = 300
+  const ry = 200
+  // Table oval fixed size (independent of rx/ry)
+  const TABLE_W = 360
+  const TABLE_H = 230
 
   const totalSeats = players.length  // human + AIs
   const stepDeg = 360 / totalSeats   // e.g. 120° for 3 players
@@ -153,10 +157,10 @@ export function GameScreen() {
             className="absolute bg-felt rounded-[50%] border-4 border-felt-light/30 shadow-2xl
                         flex items-center justify-center"
             style={{
-              left: cx - rx * 0.72,
-              top:  cy - ry * 0.72,
-              width:  rx * 1.44,
-              height: ry * 1.44,
+              left:   cx - TABLE_W / 2,
+              top:    cy - TABLE_H / 2,
+              width:  TABLE_W,
+              height: TABLE_H,
             }}
           >
             <GameBoard phase={phase} communityCards={communityCards} pots={pots} currentBet={currentBet} />
