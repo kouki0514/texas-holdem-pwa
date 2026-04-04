@@ -219,6 +219,11 @@ function getPosition(playerIndex: number, dealerIndex: number, n: number): strin
   return p6[rel % 6] ?? 'BTN'
 }
 
+/** Normalize rank to poker hand notation: '10' → 'T', others unchanged */
+function normalizeRank(rank: string): string {
+  return rank === '10' ? 'T' : rank
+}
+
 function handToKey(player: Player): string | null {
   const cards = player.holeCards
   if (!cards || cards.length < 2) return null
@@ -226,9 +231,11 @@ function handToKey(player: Player): string | null {
   if (!c1 || !c2) return null
   const v1 = rankToValue(c1.rank); const v2 = rankToValue(c2.rank)
   const hi = v1 >= v2 ? c1 : c2; const lo = v1 >= v2 ? c2 : c1
-  const suited = hi.rank === lo.rank ? '' : (hi.suit === lo.suit ? 's' : 'o')
-  if (hi.rank === lo.rank) return `${hi.rank}${lo.rank}`
-  return `${hi.rank}${lo.rank}${suited}`
+  const hiR = normalizeRank(hi.rank)
+  const loR = normalizeRank(lo.rank)
+  const suited = v1 === v2 ? '' : (hi.suit === lo.suit ? 's' : 'o')
+  if (v1 === v2) return `${hiR}${loR}`
+  return `${hiR}${loR}${suited}`
 }
 
 function countPreflopRaises(state: GameState): number {
