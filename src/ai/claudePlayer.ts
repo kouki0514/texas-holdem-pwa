@@ -706,9 +706,11 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const isMultiway = numOpponents >= 2
 
   // ── Pot odds & required equity ──────────────────────────────────────────────
-  const potOdds = toCall > 0 ? toCall / (totalPot + toCall) : 0
-  const potOddsStr = toCall > 0
-    ? `${(potOdds * 100).toFixed(1)}% (call ${toCall} into pot-after-call ${totalPot + toCall})`
+  // Cap actual call amount by player's remaining chips (short-stack scenario)
+  const actualCall = Math.min(toCall, player.chips)
+  const potOdds = actualCall > 0 ? actualCall / (totalPot + actualCall) : 0
+  const potOddsStr = actualCall > 0
+    ? `${(potOdds * 100).toFixed(1)}% (call ${actualCall} into pot-after-call ${totalPot + actualCall})`
     : 'N/A (no call required)'
 
   // ── Opponent bet sizing relative to pot ─────────────────────────────────────
