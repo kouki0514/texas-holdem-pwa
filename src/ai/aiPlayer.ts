@@ -53,51 +53,173 @@ const OPEN_RANGES: Record<string, Record<string, string>> = {
     '98s':'R','97s':'R','96s':'R','87s':'R','86s':'R','76s':'R','75s':'R','65s':'R','64s':'R','54s':'R','53s':'R','43s':'R' },
 }
 
+// ── BB defend (call) ranges ───────────────────────────────────────────────────
 const BB_CALL_VS_BTN: Record<string, boolean> = {
-  'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
-  'K9o':true,'K8o':true,'K7o':true,'K6o':true,'K5o':true,
-  'Q9o':true,'Q8o':true,'Q7o':true,'Q6o':true,
-  'J9o':true,'J8o':true,'J7o':true,
-  'T8o':true,'T7o':true,'T6o':true,
+  // Offsuit broadways & Ax
+  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
+  'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,'K5o':true,
+  'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,'Q6o':true,
+  'JTo':true,'J9o':true,'J8o':true,'J7o':true,
+  'T9o':true,'T8o':true,'T7o':true,'T6o':true,
   '98o':true,'97o':true,'96o':true,
   '87o':true,'86o':true,'76o':true,'75o':true,'65o':true,
-  'K4s':true,'K3s':true,'K2s':true,'Q6s':true,'Q5s':true,'Q4s':true,'Q3s':true,'Q2s':true,
+  // Small suited
+  'K4s':true,'K3s':true,'K2s':true,
+  'Q6s':true,'Q5s':true,'Q4s':true,'Q3s':true,'Q2s':true,
   'J6s':true,'J5s':true,'J4s':true,'J3s':true,'J2s':true,
   'T5s':true,'T4s':true,'T3s':true,'T2s':true,
   '95s':true,'94s':true,'85s':true,'84s':true,'74s':true,'73s':true,'63s':true,'52s':true,'42s':true,'32s':true,
 }
 
-const BB_CALL_VS_OTHER: Record<string, boolean> = {
-  'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
-  'K8o':true,'K7o':true,'K6o':true,'K5o':true,
-  'Q8o':true,'Q7o':true,'Q6o':true,
-  'J8o':true,'J7o':true,'T7o':true,'T6o':true,
-  '97o':true,'87o':true,'76o':true,'65o':true,
+const BB_CALL_VS_CO: Record<string, boolean> = {
+  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
+  'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,
+  'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,
+  'JTo':true,'J9o':true,'J8o':true,'J7o':true,
+  'T9o':true,'T8o':true,'T7o':true,
+  '98o':true,'97o':true,'87o':true,'76o':true,'65o':true,
+  'Q5s':true,'Q4s':true,'Q3s':true,'J5s':true,'J4s':true,'T4s':true,'T3s':true,
+  '95s':true,'85s':true,'84s':true,'74s':true,'63s':true,'53s':true,
+}
+
+const BB_CALL_VS_EP: Record<string, boolean> = {
+  // vs UTG/HJ open — tighter
+  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,
+  'KTo':true,'K9o':true,'K8o':true,
+  'QTo':true,'Q9o':true,'Q8o':true,
+  'JTo':true,'J9o':true,'J8o':true,
+  'T9o':true,'T8o':true,'98o':true,'87o':true,'76o':true,
+  'Q4s':true,'J4s':true,'T3s':true,'95s':true,'85s':true,'74s':true,
 }
 
 const SB_CALL_VS_BTN: Record<string, boolean> = {
-  'JTs':true,'T9s':true,'98s':true,'87s':true,
-  'ATo':true,'KTo':true,'QTo':true,'JTo':true,
+  'ATo':true,'A9o':true,'A8o':true,
+  'KTo':true,'K9o':true,
+  'QTo':true,'Q9o':true,
+  'JTo':true,'J9o':true,
+  'T9o':true,'98o':true,
+  'JTs':true,'T9s':true,'98s':true,'87s':true,'76s':true,
 }
 
+// ── Cold call ranges for non-BB/SB positions ──────────────────────────────────
+// These cover IP cold calls (BTN/CO/HJ facing an open)
+const COLD_CALL_VS_EP: Record<string, boolean> = {
+  // IP positions can call with pocket pairs, suited broadways, suited connectors
+  'TT':true,'99':true,'88':true,'77':true,'66':true,'55':true,
+  'AJs':true,'ATs':true,'A9s':true,'A8s':true,'A7s':true,'A6s':true,'A5s':true,
+  'KQs':true,'KJs':true,'KTs':true,'K9s':true,
+  'QJs':true,'QTs':true,'Q9s':true,
+  'JTs':true,'J9s':true,
+  'T9s':true,'T8s':true,'98s':true,'87s':true,'76s':true,'65s':true,
+  'AJo':true,'ATo':true,'A9o':true,
+  'KQo':true,'KJo':true,'KTo':true,
+  'QJo':true,'QTo':true,'JTo':true,
+}
+
+const COLD_CALL_VS_CO: Record<string, boolean> = {
+  'TT':true,'99':true,'88':true,'77':true,'66':true,'55':true,'44':true,
+  'AJs':true,'ATs':true,'A9s':true,'A8s':true,'A7s':true,'A6s':true,'A5s':true,'A4s':true,'A3s':true,
+  'KQs':true,'KJs':true,'KTs':true,'K9s':true,'K8s':true,
+  'QJs':true,'QTs':true,'Q9s':true,'Q8s':true,
+  'JTs':true,'J9s':true,'J8s':true,
+  'T9s':true,'T8s':true,'98s':true,'97s':true,'87s':true,'86s':true,'76s':true,'65s':true,'54s':true,
+  'AJo':true,'ATo':true,'A9o':true,'A8o':true,
+  'KQo':true,'KJo':true,'KTo':true,
+  'QJo':true,'QTo':true,'JTo':true,
+}
+
+// ── 3-bet ranges ──────────────────────────────────────────────────────────────
 const THREBET_RANGES: Record<string, Record<string, string>> = {
-  'BTN_VS_CO': { 'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R','AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R','KQs':'R','QJs':'R','JTs':'R','AKo':'R','AQo':'R','KQo':'R',
-    '99':'C','88':'C','77':'C','AJo':'C','ATo':'C','KJs':'C','KTs':'C','QTs':'C','T9s':'C','98s':'C' },
-  'BTN_VS_EP': { 'AA':'R','KK':'R','QQ':'R','JJ':'R','AKs':'R','AQs':'R','A5s':'R','A4s':'R','KQs':'R','AKo':'R','AQo':'R',
-    'TT':'C','99':'C','AJs':'C','ATs':'C','KJs':'C','QJs':'C','JTs':'C' },
-  'CO_VS_EP':  { 'AA':'R','KK':'R','QQ':'R','JJ':'R','AKs':'R','AQs':'R','A5s':'R','A4s':'R','KQs':'R','AKo':'R','AQo':'R',
-    'TT':'C','99':'C','AJs':'C','KJs':'C','QJs':'C' },
-  'SB_VS_BTN': { 'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R','AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R','KQs':'R','QJs':'R','JTs':'R','AKo':'R','AQo':'R','AJo':'R','KQo':'R',
-    '99':'C','88':'C','77':'C','KJs':'C','KTs':'C','QTs':'C','T9s':'C','98s':'C' },
-  'SB_VS_CO':  { 'AA':'R','KK':'R','QQ':'R','JJ':'R','AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R','AKo':'R','AQo':'R',
-    'TT':'C','99':'C','ATs':'C','KJs':'C','QJs':'C' },
-  'BB_VS_BTN': { 'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R','AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R','KQs':'R','QJs':'R','JTs':'R','T9s':'R','AKo':'R','AQo':'R','AJo':'R','KQo':'R',
-    '99':'C','88':'C','77':'C','66':'C','KJs':'C','KTs':'C','QTs':'C','98s':'C','87s':'C' },
-  'BB_VS_CO':  { 'AA':'R','KK':'R','QQ':'R','JJ':'R','AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R','AKo':'R','AQo':'R',
-    'TT':'C','99':'C','ATs':'C','KJs':'C','QJs':'C' },
-  'BB_VS_EP':  { 'AA':'R','KK':'R','QQ':'R','JJ':'R','AKs':'R','AQs':'R','A5s':'R','KQs':'R','AKo':'R','AQo':'R',
-    'TT':'C','99':'C','AJs':'C','KJs':'C' },
-  'DEFAULT':   { 'AA':'R','KK':'R','QQ':'R','AKs':'R','AKo':'R' },
+  'BTN_VS_CO': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R',
+    'AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R',
+    'KQs':'R','QJs':'R','JTs':'R',
+    'AKo':'R','AQo':'R','AJo':'R','KQo':'R',
+    '99':'C','88':'C','77':'C','66':'C',
+    'KJs':'C','KTs':'C','QTs':'C','T9s':'C','98s':'C','87s':'C',
+    'ATo':'C','KJo':'C','KTo':'C','QJo':'C',
+  },
+  'BTN_VS_EP': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R',
+    'AKo':'R','AQo':'R','AJo':'R',
+    'TT':'C','99':'C','88':'C','77':'C',
+    'ATs':'C','KJs':'C','KTs':'C','QJs':'C','QTs':'C','JTs':'C',
+    'ATo':'C','KQo':'C','KJo':'C',
+  },
+  'CO_VS_EP': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R',
+    'AKo':'R','AQo':'R','AJo':'R',
+    'TT':'C','99':'C','88':'C',
+    'ATs':'C','KJs':'C','QJs':'C','JTs':'C',
+    'KQo':'C','KJo':'C',
+  },
+  'HJ_VS_EP': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','A5s':'R','KQs':'R',
+    'AKo':'R','AQo':'R',
+    'TT':'C','99':'C','88':'C',
+    'AJs':'C','ATs':'C','KJs':'C','QJs':'C',
+    'AJo':'C','KQo':'C',
+  },
+  'SB_VS_BTN': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R',
+    'AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R',
+    'KQs':'R','QJs':'R','JTs':'R','T9s':'R',
+    'AKo':'R','AQo':'R','AJo':'R','KQo':'R',
+    '99':'C','88':'C','77':'C','66':'C',
+    'KJs':'C','KTs':'C','QTs':'C','98s':'C','87s':'C','76s':'C',
+  },
+  'SB_VS_CO': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R',
+    'AKo':'R','AQo':'R','AJo':'R',
+    'TT':'C','99':'C','88':'C','77':'C',
+    'ATs':'C','KJs':'C','KTs':'C','QJs':'C','QTs':'C','JTs':'C',
+    'KQo':'C','KJo':'C',
+  },
+  'SB_VS_EP': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','A5s':'R','KQs':'R',
+    'AKo':'R','AQo':'R',
+    'TT':'C','99':'C','88':'C',
+    'AJs':'C','ATs':'C','KJs':'C','QJs':'C',
+    'AJo':'C','KQo':'C',
+  },
+  'BB_VS_BTN': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R',
+    'AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R',
+    'KQs':'R','QJs':'R','JTs':'R','T9s':'R','98s':'R',
+    'AKo':'R','AQo':'R','AJo':'R','KQo':'R',
+    '99':'C','88':'C','77':'C','66':'C','55':'C',
+    'KJs':'C','KTs':'C','QTs':'C','87s':'C','76s':'C','65s':'C',
+    'KJo':'C','KTo':'C','QJo':'C',
+  },
+  'BB_VS_CO': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','A3s':'R','KQs':'R',
+    'AKo':'R','AQo':'R','AJo':'R',
+    'TT':'C','99':'C','88':'C','77':'C','66':'C',
+    'ATs':'C','A9s':'C','KJs':'C','KTs':'C','QJs':'C','QTs':'C','JTs':'C','T9s':'C',
+    'KQo':'C','KJo':'C','QJo':'C',
+  },
+  'BB_VS_EP': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R',
+    'AKo':'R','AQo':'R','AJo':'R',
+    'TT':'C','99':'C','88':'C','77':'C',
+    'ATs':'C','A9s':'C','KJs':'C','KTs':'C','QJs':'C','JTs':'C','T9s':'C',
+    'KQo':'C','KJo':'C',
+  },
+  'DEFAULT': {
+    'AA':'R','KK':'R','QQ':'R','JJ':'R',
+    'AKs':'R','AQs':'R','KQs':'R',
+    'AKo':'R','AQo':'R',
+    'TT':'C','99':'C','88':'C',
+    'AJs':'C','ATs':'C','KJs':'C','QJs':'C',
+    'KQo':'C','AJo':'C',
+  },
 }
 
 const FOURBET_RANGE: Record<string, string> = {
@@ -350,12 +472,23 @@ function preflopAction(
   if (raiseCount === 1) {
     const threeRange = get3betRange(myPos, raiserPos)
     const signal = threeRange[key] ?? 'F'
+
+    // Select call range by position and raiser position
+    const epPositions = ['UTG', 'HJ']
+    const isRaiserEP = epPositions.includes(raiserPos)
     let callRange: Record<string, boolean> = {}
     if (myPos === 'BB') {
-      callRange = raiserPos === 'BTN' ? BB_CALL_VS_BTN : BB_CALL_VS_OTHER
-    } else if (myPos === 'SB' && raiserPos === 'BTN') {
-      callRange = SB_CALL_VS_BTN
+      if (raiserPos === 'BTN') callRange = BB_CALL_VS_BTN
+      else if (raiserPos === 'CO') callRange = BB_CALL_VS_CO
+      else callRange = BB_CALL_VS_EP
+    } else if (myPos === 'SB') {
+      if (raiserPos === 'BTN') callRange = SB_CALL_VS_BTN
+      else callRange = {}  // SB vs EP/CO: mostly 3-bet or fold
+    } else {
+      // IP positions (CO, BTN, HJ): cold call range
+      callRange = isRaiserEP ? COLD_CALL_VS_EP : COLD_CALL_VS_CO
     }
+
     const canCallFromRange = callRange[key] ?? false
     const resolved = applyDifficulty(signal, difficulty)
     if (resolved === 'R') {
