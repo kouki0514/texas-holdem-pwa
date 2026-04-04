@@ -79,8 +79,9 @@ function StatCard({ label, value, sub, color }: StatCardProps) {
 export function StatsScreen({ onClose }: Props) {
   const [hands, setHands] = useState<HandRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const sessionStats = useGameStore((s) => s.sessionStats)
-  const bigBlind     = useGameStore((s) => s.bigBlind)
+  const sessionStats      = useGameStore((s) => s.sessionStats)
+  const bigBlind          = useGameStore((s) => s.bigBlind)
+  const resetLifetimeStats = useGameStore((s) => s.resetLifetimeStats)
 
   useEffect(() => {
     loadAllHands().then((h) => { setHands(h); setLoading(false) }).catch(() => setLoading(false))
@@ -90,6 +91,11 @@ export function StatsScreen({ onClose }: Props) {
     if (!confirm('全履歴を削除しますか？')) return
     await clearAllHands()
     setHands([])
+  }
+
+  const handleResetLifetime = () => {
+    if (!confirm('累計アドバンスト指標をリセットしますか？\n（ハンド履歴・損益グラフは保持されます）')) return
+    resetLifetimeStats()
   }
 
   // ── Derived stats from IndexedDB hands ──────────────────────────────────
@@ -218,7 +224,15 @@ export function StatsScreen({ onClose }: Props) {
 
             {/* 10 advanced metrics — 2-column card grid */}
             <div>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">アドバンスト指標（このセッション）</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-white/40 uppercase tracking-widest">アドバンスト指標（累計）</p>
+                <button
+                  onClick={handleResetLifetime}
+                  className="text-[10px] text-white/30 hover:text-yellow-400 transition-colors"
+                >
+                  累計リセット
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {advancedMetrics.map((m) => (
                   <StatCard key={m.label} {...m} />

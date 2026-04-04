@@ -4,6 +4,82 @@
 
 import type { HandRank, Card } from '@/game/types'
 
+// SessionStats is defined here (canonical) and re-exported from gameStore.ts
+export interface SessionStats {
+  initialChips: number
+  handsPlayed: number
+  handsWon: number
+  vpipHands: number
+  stealOpps: number
+  steals: number
+  checkRaiseOpps: number
+  checkRaises: number
+  threeBetOpps: number
+  threeBets: number
+  foldTo3betOpps: number
+  foldTo3bets: number
+  cbetOpps: number
+  cbets: number
+  foldToCbetOpps: number
+  foldToCbets: number
+  sawFlopHands: number
+  wtsdHands: number
+  wsdHands: number
+  wsdWins: number
+  totalInvested: number
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// localStorage persistence for cumulative SessionStats
+// ──────────────────────────────────────────────────────────────────────────────
+
+const LIFETIME_KEY = 'texas-holdem-lifetime-stats'
+
+/** Zero-value SessionStats used as fallback when nothing is stored yet */
+const ZERO_STATS: SessionStats = {
+  initialChips: 0, handsPlayed: 0, handsWon: 0, vpipHands: 0,
+  stealOpps: 0, steals: 0,
+  checkRaiseOpps: 0, checkRaises: 0,
+  threeBetOpps: 0, threeBets: 0,
+  foldTo3betOpps: 0, foldTo3bets: 0,
+  cbetOpps: 0, cbets: 0,
+  foldToCbetOpps: 0, foldToCbets: 0,
+  sawFlopHands: 0, wtsdHands: 0,
+  wsdHands: 0, wsdWins: 0,
+  totalInvested: 0,
+}
+
+/** Load the cumulative lifetime stats from localStorage. Returns zero stats if nothing stored. */
+export function loadLifetimeStats(): SessionStats {
+  try {
+    const raw = localStorage.getItem(LIFETIME_KEY)
+    if (!raw) return { ...ZERO_STATS }
+    const parsed = JSON.parse(raw) as Partial<SessionStats>
+    // Merge with ZERO_STATS to handle missing keys from older versions
+    return { ...ZERO_STATS, ...parsed }
+  } catch {
+    return { ...ZERO_STATS }
+  }
+}
+
+/** Save cumulative lifetime stats to localStorage. */
+export function saveLifetimeStats(stats: SessionStats): void {
+  try {
+    localStorage.setItem(LIFETIME_KEY, JSON.stringify(stats))
+  } catch {
+    // Ignore storage errors (private browsing, quota exceeded, etc.)
+  }
+}
+
+/** Erase all cumulative lifetime stats from localStorage. */
+export function clearLifetimeStats(): void {
+  try {
+    localStorage.removeItem(LIFETIME_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 export interface HandRecord {
   id?: number            // auto-incremented PK
   handNumber: number

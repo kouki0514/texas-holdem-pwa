@@ -12,7 +12,8 @@ import {
 } from '@/game/gameEngine'
 import { decideAction, type AiDifficulty } from '@/ai/aiPlayer'
 import { claudeDecideAction } from '@/ai/claudePlayer'
-import { saveHand } from './statsDb'
+import { saveHand, loadLifetimeStats, saveLifetimeStats, clearLifetimeStats } from './statsDb'
+export type { SessionStats } from './statsDb'
 import { evaluateHand } from '@/game/handEvaluator'
 import type { Card } from '@/game/types'
 
@@ -35,34 +36,8 @@ export interface ReasoningEntry {
   pot: number
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Session statistics
-// ──────────────────────────────────────────────────────────────────────────────
-
-export interface SessionStats {
-  initialChips: number
-  handsPlayed: number
-  handsWon: number       // hands where human won at least one pot
-  vpipHands: number      // hands where human voluntarily put chips in preflop
-  // ── Advanced metrics (opportunities / occurrences) ──────────────────────────
-  stealOpps: number       // ①Steal: BTN/CO/SB with no prior open raise
-  steals: number
-  checkRaiseOpps: number  // ②CheckRaise: human checked, then faced a bet same street
-  checkRaises: number
-  threeBetOpps: number    // ③3bet: opponent opened, human is first to act after
-  threeBets: number
-  foldTo3betOpps: number  // ④Fold-to-3bet: human opened, then faced 3-bet
-  foldTo3bets: number
-  cbetOpps: number        // ⑤Cbet: human was PFR and is first to act on flop
-  cbets: number
-  foldToCbetOpps: number  // ⑥Fold-to-Cbet: opponent c-bet flop, human must act
-  foldToCbets: number
-  sawFlopHands: number    // ⑦WTSD base: hands where human saw the flop
-  wtsdHands: number       // ⑦WTSD: saw flop and reached showdown
-  wsdHands: number        // ⑧WSD base
-  wsdWins: number         // ⑧WSD: won at showdown
-  totalInvested: number   // ⑨ROI denominator: total chips put in across all hands
-}
+// SessionStats is defined in statsDb.ts and re-exported above via `export type { SessionStats }`
+import type { SessionStats } from './statsDb'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Store interface
@@ -127,6 +102,7 @@ interface GameStore extends GameState {
   quitGame: () => void
   addOnChips: (playerIds: string[]) => void
   setLanguage: (lang: 'ja' | 'en') => void
+  resetLifetimeStats: () => void
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -179,18 +155,11 @@ export const useGameStore = create<GameStore>()(
         Object.assign(s, createInitialState(players))
         s.latestReasoning = {}
         s.reasoningLog = []
+        // Load lifetime cumulative stats and carry them forward into this session
+        const lifetime = loadLifetimeStats()
         s.sessionStats = {
+          ...lifetime,
           initialChips: human?.chips ?? 1000,
-          handsPlayed: 0, handsWon: 0, vpipHands: 0,
-          stealOpps: 0, steals: 0,
-          checkRaiseOpps: 0, checkRaises: 0,
-          threeBetOpps: 0, threeBets: 0,
-          foldTo3betOpps: 0, foldTo3bets: 0,
-          cbetOpps: 0, cbets: 0,
-          foldToCbetOpps: 0, foldToCbets: 0,
-          sawFlopHands: 0, wtsdHands: 0,
-          wsdHands: 0, wsdWins: 0,
-          totalInvested: 0,
         }
         s._vpipThisHand = false
         s._humanPfr = false
@@ -507,6 +476,8 @@ export const useGameStore = create<GameStore>()(
           s._handPersisted = true
           s.handNetChipsMap[afterAction.handNumber] = netChips
         })
+        // Save current sessionStats (which already carries the full cumulative total) to localStorage
+        saveLifetimeStats(get().sessionStats)
         setTimeout(() => persistHandRecord(afterAction as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
@@ -596,6 +567,8 @@ export const useGameStore = create<GameStore>()(
           s._handPersisted = true
           s.handNetChipsMap[afterAdvance.handNumber] = netChips
         })
+        // Save current sessionStats (which already carries the full cumulative total) to localStorage
+        saveLifetimeStats(get().sessionStats)
         setTimeout(() => persistHandRecord(afterAdvance as GameState, humanHoleCards, vpip, pfr, chipsAtHandStart), 0)
       }
 
@@ -700,6 +673,14 @@ export const useGameStore = create<GameStore>()(
 
     quitGame() {
       set((s) => { s.phase = 'ended' })
+    },
+
+    resetLifetimeStats() {
+      clearLifetimeStats()
+      const zero = loadLifetimeStats() // returns ZERO_STATS after clear
+      set((s) => {
+        s.sessionStats = { ...zero, initialChips: s.sessionStats.initialChips }
+      })
     },
   })),
 )
