@@ -1,0 +1,53 @@
+nohup: ignoring input
+6-Max Preflop CFR+ Solver
+  Iterations     : 3,000,000
+  Equity samples : 100 per pair
+  Output         : /home/kouki/texas-holdem-pwa/scripts/preflop_strategy.json
+
+Precomputing 169x169 = 28,561 equity pairs (100 samples each)...
+  3,380/28,561 (12%)  115.2s
+  6,760/28,561 (24%)  206.0s
+  10,140/28,561 (36%)  286.1s
+  13,520/28,561 (47%)  346.9s
+  16,900/28,561 (59%)  394.9s
+  20,280/28,561 (71%)  430.6s
+  23,660/28,561 (83%)  453.1s
+  27,040/28,561 (95%)  464.4s
+  28,561/28,561 (100%)  465.4s
+Equity table ready (28,561 entries)  465.4s
+
+Running CFR+...
+  iter  100,000 / 3,000,000  16s elapsed  ETA 455s  50,509 infosets
+  iter  200,000 / 3,000,000  28s elapsed  ETA 391s  53,749 infosets
+  iter  300,000 / 3,000,000  42s elapsed  ETA 374s  54,781 infosets
+  iter  400,000 / 3,000,000  53s elapsed  ETA 343s  55,447 infosets
+  iter  500,000 / 3,000,000  66s elapsed  ETA 331s  55,872 infosets
+  iter  600,000 / 3,000,000  77s elapsed  ETA 308s  55,891 infosets
+  iter  700,000 / 3,000,000  85s elapsed  ETA 281s  55,892 infosets
+  iter  800,000 / 3,000,000  96s elapsed  ETA 263s  55,892 infosets
+  iter  900,000 / 3,000,000  106s elapsed  ETA 247s  55,894 infosets
+  iter 1,000,000 / 3,000,000  115s elapsed  ETA 230s  55,894 infosets
+  iter 1,100,000 / 3,000,000  125s elapsed  ETA 216s  55,894 infosets
+  iter 1,200,000 / 3,000,000  136s elapsed  ETA 203s  55,894 infosets
+  iter 1,300,000 / 3,000,000  144s elapsed  ETA 188s  55,894 infosets
+  iter 1,400,000 / 3,000,000  154s elapsed  ETA 176s  55,894 infosets
+  iter 1,500,000 / 3,000,000  164s elapsed  ETA 164s  55,894 infosets
+  iter 1,600,000 / 3,000,000  173s elapsed  ETA 151s  55,894 infosets
+  iter 1,700,000 / 3,000,000  183s elapsed  ETA 140s  55,894 infosets
+  iter 1,800,000 / 3,000,000  193s elapsed  ETA 129s  55,894 infosets
+  iter 1,900,000 / 3,000,000  201s elapsed  ETA 117s  55,894 infosets
+  iter 2,000,000 / 3,000,000  212s elapsed  ETA 106s  55,894 infosets
+  iter 2,100,000 / 3,000,000  222s elapsed  ETA 95s  55,895 infosets
+  iter 2,200,000 / 3,000,000  230s elapsed  ETA 84s  55,895 infosets
+  iter 2,300,000 / 3,000,000  240s elapsed  ETA 73s  55,895 infosets
+  iter 2,400,000 / 3,000,000  250s elapsed  ETA 63s  55,895 infosets
+  iter 2,500,000 / 3,000,000  260s elapsed  ETA 52s  55,895 infosets
+  iter 2,600,000 / 3,000,000  268s elapsed  ETA 41s  55,895 infosets
+  iter 2,700,000 / 3,000,000  279s elapsed  ETA 31s  55,895 infosets
+  iter 2,800,000 / 3,000,000  289s elapsed  ETA 21s  55,895 infosets
+  iter 2,900,000 / 3,000,000  297s elapsed  ETA 10s  55,897 infosets
+  iter 3,000,000 / 3,000,000  307s elapsed  ETA 0s  55,897 infosets
+CFR+ done in 307.3s — 55,897 infosets
+
+Exporting strategy...
+Wrote 55,897 entries → /home/kouki/texas-holdem-pwa/scripts/preflop_strategy.json
