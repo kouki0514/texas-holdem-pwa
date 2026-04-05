@@ -457,7 +457,7 @@ function buildActionHistory(state: GameState): string {
   return parts.join('_')
 }
 
-/** CFR戦略テーブルを参照して混合戦略を返す。キー未発見時は null。*/
+/** CFR戦略テーブルを参照して混合戦略を返す。キー未発見時・未収束時は null。*/
 function getCFRStrategy(
   pos: string,
   actionHistory: string,
@@ -465,7 +465,12 @@ function getCFRStrategy(
 ): { fold: number; call: number; raise: number } | null {
   const histPart = actionHistory.length > 0 ? actionHistory : 'NONE'
   const key = `${pos}_${histPart}_${handKey}`
-  return CFR_STRATEGY[key] ?? null
+  const strat = CFR_STRATEGY[key]
+  if (!strat) return null
+  // 均一戦略（未収束: 各値が0.333±0.01）はルールベースにフォールバック
+  const isUniform = Math.abs(strat.fold - strat.call) < 0.02 && Math.abs(strat.call - strat.raise) < 0.02
+  if (isUniform) return null
+  return strat
 }
 
 /** CFR混合戦略からアクションをサンプリングする */
@@ -474,10 +479,20 @@ function sampleCFRAction(
   canCheck: boolean,
   canRaise: boolean,
 ): 'fold' | 'call' | 'raise' {
-  // raiseが不可能な場合はfold/callに再正規化
-  const r = canRaise ? strat.raise : 0
-  const c = strat.call
-  const f = strat.fold
+  let f = strat.fold
+  let c = strat.call
+  let r = strat.raise
+  // raiseが不可能な場合: raise確率をfold:callの比率で按分してから再正規化
+  if (!canRaise && r > 0) {
+    const fc = f + c
+    if (fc > 0) {
+      f += r * (f / fc)
+      c += r * (c / fc)
+    } else {
+      c += r  // fold=call=0 の極端なケース
+    }
+    r = 0
+  }
   const total = f + c + r
   if (total <= 0) return canCheck ? 'call' : 'fold'
   const rnd = Math.random() * total
