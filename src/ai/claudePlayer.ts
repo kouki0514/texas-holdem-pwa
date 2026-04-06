@@ -761,23 +761,6 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const myOrder = postflopOrder(player)
   const isIP = activePlayers2.every((p) => postflopOrder(p) <= myOrder)
 
-  let posStrategy: string
-  if (posLower.includes('btn')) {
-    posStrategy = 'BTN: widest open-raise range (~45-50% hands), steal often, apply max pressure post-flop IP'
-  } else if (posLower.includes('co')) {
-    posStrategy = 'CO: open ~30% hands, 3-bet squeeze BTN/SB, play aggressively IP'
-  } else if (posLower.includes('sb')) {
-    posStrategy = isIP
-      ? 'SB (IP vs BB HU): acts last post-flop — apply pressure, bet wide for value and bluffs'
-      : 'SB: OOP post-flop — prefer 3-bet over call to deny equity; use check-raise, avoid donk-betting'
-  } else if (posLower.includes('bb')) {
-    posStrategy = isIP
-      ? 'BB (IP vs SB HU): acts last post-flop — apply pressure, bet wide for value and bluffs'
-      : 'BB: getting best price, defend wide (pot odds), check-raise as primary weapon OOP'
-  } else {
-    posStrategy = 'EP/MP: tight range, raise for value/protection, fold to 3-bets without premiums'
-  }
-
   // ── River IP + opponent checked: 3-way decision note ────────────────────────
   const isRiver = state.phase === 'river'
   const opponentChecked = isRiver && toCall === 0 &&
@@ -785,14 +768,6 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const riverIpCheckNote = isRiver && isIP && opponentChecked
     ? `RIVER IP + OPPONENT CHECKED: You have exactly 3 options — (A) Value bet (SMALL/MEDIUM/LARGE) with strong made hand, (B) Bluff bet (SMALL/MEDIUM) to fold out weak hands you can't beat, (C) Check behind for free showdown with medium-strength hands. Do NOT consider call or fold here — bet or check only.`
     : null
-
-  // ── Bluff frequency guidance ─────────────────────────────────────────────────
-  const bluffBase = toCall > 0
-    ? `To keep opponent indifferent: bluff ${(potOdds * 100).toFixed(0)}% of your betting range`
-    : '1/3 pot needs 25% bluffs, 1/2 pot needs 33%, 2/3 pot needs 40%'
-  const bluffRatio = isMultiway
-    ? `${bluffBase}. MULTIWAY POT (${numOpponents} opponents): significantly reduce bluff frequency — each opponent independently calls, so bluffs lose EV rapidly.`
-    : bluffBase
 
   // ── Hole card strength ───────────────────────────────────────────────────────
   const handStrength = state.communityCards.length > 0
@@ -832,32 +807,6 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
 
   const rangeAdvResult = analyzeBoardRangeAdvantage(state.communityCards, heroRange, opponentRanges)
 
-  const rangeAnalysisLines: string[] = [
-    `Hero range estimate   : ${heroRange.description} (based on ${heroRange.position}, action: ${heroRange.action})`,
-  ]
-  opponentRanges.forEach((r, i) => {
-    const name = activeOpponents[i]?.name ?? `Opp${i + 1}`
-    rangeAnalysisLines.push(`${name} range estimate: ${r.description} (${r.position}, action: ${r.action})`)
-  })
-  rangeAnalysisLines.push(`Range advantage: ${rangeAdvResult.rangeAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.rangeAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}`)
-  rangeAnalysisLines.push(`Nut advantage  : ${rangeAdvResult.nutAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.nutAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}`)
-  rangeAnalysisLines.push(rangeAdvResult.summary)
-
-  // ── Range-based strategy hint ─────────────────────────────────────────────────
-  let rangeStrategyHint: string
-  if (rangeAdvResult.rangeAdvantage === 'hero') {
-    rangeStrategyHint = 'Hero has range advantage — increase bet frequency, prefer leading bets and double barrels over checking.'
-  } else if (rangeAdvResult.rangeAdvantage === 'villain') {
-    rangeStrategyHint = 'Villain(s) have range advantage — prefer check-raise or check-call; avoid wide donk-betting; let opponent bet into your strong hands.'
-  } else {
-    rangeStrategyHint = 'Ranges are balanced — mix bets and checks; use hand strength and position to guide sizing.'
-  }
-
-  const nutStrategyHint = rangeAdvResult.nutAdvantage === 'hero'
-    ? 'Hero has nut advantage — polarize sizing (LARGE/OVERBET) when value betting; opponent must call with weaker ranges.'
-    : rangeAdvResult.nutAdvantage === 'villain'
-      ? 'Villain has nut advantage — be cautious with medium-strength hands facing large bets; check-raise bluffs less effective.'
-      : ''
 
   // ── Valid actions list ───────────────────────────────────────────────────────
   const validActions: string[] = ['fold']
