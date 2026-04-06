@@ -60,12 +60,12 @@ const OPEN_RANGES: Record<string, Record<string, string>> = {
 const BB_CALL_VS_BTN: Record<string, boolean> = {
   // Offsuit broadways & Ax
   'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
-  'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,'K5o':true,
-  'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,'Q6o':true,
-  'JTo':true,'J9o':true,'J8o':true,'J7o':true,
-  'T9o':true,'T8o':true,'T7o':true,'T6o':true,
-  '98o':true,'97o':true,'96o':true,
-  '87o':true,'86o':true,'76o':true,'75o':true,'65o':true,
+  'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,
+  'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,
+  'JTo':true,'J9o':true,'J8o':true,'J7o':true,'J6o':true,
+  'T9o':true,'T8o':true,'T7o':true,
+  '98o':true,'97o':true,
+  '87o':true,'76o':true,
   // Small suited
   'K4s':true,'K3s':true,'K2s':true,
   'Q6s':true,'Q5s':true,'Q4s':true,'Q3s':true,'Q2s':true,
@@ -76,11 +76,11 @@ const BB_CALL_VS_BTN: Record<string, boolean> = {
 
 const BB_CALL_VS_CO: Record<string, boolean> = {
   'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
-  'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,
-  'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,
+  'KTo':true,'K9o':true,'K8o':true,'K7o':true,
+  'QTo':true,'Q9o':true,'Q8o':true,
   'JTo':true,'J9o':true,'J8o':true,'J7o':true,
   'T9o':true,'T8o':true,'T7o':true,
-  '98o':true,'97o':true,'87o':true,'76o':true,'65o':true,
+  '98o':true,'97o':true,'87o':true,'76o':true,
   'Q5s':true,'Q4s':true,'Q3s':true,'J5s':true,'J4s':true,'T4s':true,'T3s':true,
   '95s':true,'85s':true,'84s':true,'74s':true,'63s':true,'53s':true,
 }
@@ -91,7 +91,7 @@ const BB_CALL_VS_EP: Record<string, boolean> = {
   'KTo':true,'K9o':true,'K8o':true,
   'QTo':true,'Q9o':true,'Q8o':true,
   'JTo':true,'J9o':true,'J8o':true,
-  'T9o':true,'T8o':true,'98o':true,'87o':true,'76o':true,
+  'T9o':true,'T8o':true,'98o':true,'87o':true,
   'Q4s':true,'J4s':true,'T3s':true,'95s':true,'85s':true,'74s':true,
 }
 

@@ -712,6 +712,7 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const potOddsStr = actualCall > 0
     ? `${(potOdds * 100).toFixed(1)}% (call ${actualCall} into pot-after-call ${totalPot + actualCall})`
     : 'N/A (no call required)'
+  const requiredEquityPct = (potOdds * 100).toFixed(1)
 
   // ── Opponent bet sizing relative to pot ─────────────────────────────────────
   // potBeforeBet = pot before opponent's bet was made.
@@ -889,36 +890,100 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
     })
     .join('\n')
 
-  return `You are a GTO-trained Texas Hold'em expert named "${player.name}". Make decisions using equity, pot odds, SPR, board texture, position, range analysis, and balanced bluff/value ratios. Always reason step-by-step before deciding.
+  // ── Preflop range tendency for current position ──────────────────────────────
+  const preflopRangeTendency: Record<string, string> = {
+    btn: 'BTN opens ~45-50% of hands (all pairs, most broadways, many suited connectors/aces). Postflop: widest range, highest range equity on most boards. Bet frequency: HIGH.',
+    co:  'CO opens ~28-32% of hands (all pairs down to 22, suited aces, broadway combos). Postflop: solid range advantage vs BB/SB. Bet frequency: MEDIUM-HIGH.',
+    sb:  'SB opens ~35-40% vs BTN, 3-bets or folds vs CO/EP. Postflop OOP: range is polarised (3-bet value + bluffs). Prefer check-raise. Bet frequency: LOW unless 3-bet pot.',
+    bb:  'BB defends wide (pot odds), so range is wide but capped — lacks 4-bet range vs EP. Postflop OOP: check-raise is primary weapon. Do NOT donk-bet wide. Bet frequency: LOW-MEDIUM.',
+    mp:  'EP/MP (UTG/HJ) opens ~15-22% — tight, value-heavy (pairs, AK-AT, KQ, suited broadways). Postflop: strong top-of-range, bet for value on connected boards. Bet frequency: MEDIUM.',
+  }
+  const posTendencyKey = posLower.includes('btn') ? 'btn'
+    : posLower.includes('co') ? 'co'
+    : posLower.includes('sb') ? 'sb'
+    : posLower.includes('bb') ? 'bb'
+    : 'mp'
+  const preflopRangeNote = preflopRangeTendency[posTendencyKey] ?? preflopRangeTendency['mp']!
 
-## Situation
-- Phase           : ${state.phase}
-- Position        : ${position}
+  // ── Hand assignment: check-range vs bet-range ─────────────────────────────────
+  // Classify this specific hand into betting or checking category
+  const phase = state.phase
+  let handAssignmentNote: string
+  if (phase === 'preflop') {
+    handAssignmentNote = 'PREFLOP: Assign hand to open-raise range (for value/fold-equity) or fold/call range based on position and hand strength.'
+  } else {
+    const boardAdv = rangeAdvResult.rangeAdvantage
+    const nutAdv   = rangeAdvResult.nutAdvantage
+    if (canCheck) {
+      // IP check or OOP check
+      const betCategory = equity >= 0.65 ? 'VALUE-BET (strong — thin value is still value)' :
+                          equity >= 0.48 ? 'THIN-VALUE or PROTECTION bet (slightly ahead of calling range)' :
+                          equity >= 0.30 ? 'CHECK (medium strength — protect against check-raise; pot control)' :
+                          equity >= 0.15 ? 'BLUFF candidate (low equity — bet only with fold equity or good blockers)' :
+                                           'CHECK/GIVE-UP (no equity, no fold equity — check or fold to any bet)'
+      const rangeCtx = boardAdv === 'hero'
+        ? 'Range advantage → prefer betting to deny equity, leverage higher-frequency range.'
+        : boardAdv === 'villain'
+        ? 'Villain range advantage → check more, check-raise with strong hands, avoid wide donk-bets.'
+        : 'Balanced ranges → mix bets and checks guided by hand strength and position.'
+      handAssignmentNote = `HAND ASSIGNMENT: ${betCategory}. ${rangeCtx}${nutAdv === 'hero' ? ' Nut advantage → polarize sizing (LARGE/OVERBET) when betting.' : ''}`
+    } else {
+      // Facing a bet — call vs raise vs fold decision
+      const callCategory = equity >= potOdds + 0.10 ? 'RAISE for value (strong equity cushion above pot odds)' :
+                           equity >= potOdds          ? 'CALL (equity meets pot odds — continue)' :
+                           equity >= potOdds - 0.08   ? 'MARGINAL — consider pot odds, outs, implied odds; lean call if draw' :
+                                                         'FOLD (equity below pot odds, insufficient draws)'
+      handAssignmentNote = `HAND ASSIGNMENT vs bet: ${callCategory}. Equity ${equityPct} vs required ${(potOdds*100).toFixed(1)}%.`
+    }
+  }
+
+  // ── Thin value & bluff guidance ───────────────────────────────────────────────
+  const thinValueBluffGuide = [
+    `THIN VALUE: Bet any hand that beats more than 50% of villain's calling range. Do NOT check back medium-strength hands IP when they have showdown value and beat bluff-catchers.`,
+    `BLUFF: Bluff when (a) you have fold equity (villain capped range, dry board, or showed weakness), AND (b) your hand has low showdown value (air, missed draws). Bluff frequency: ~${toCall > 0 ? (potOdds * 100).toFixed(0) : canCheck ? '25-40' : '30'}% of your betting range.`,
+    isMultiway
+      ? `MULTIWAY (${numOpponents} opponents): DRASTICALLY reduce bluff frequency. Each opponent calls independently. Only bluff with strong blockers and near-zero equity.`
+      : `HEADS-UP: Full bluff/value polarization is EV+. Balance your range at every decision point.`,
+  ].join(' ')
+
+  return `You are a GTO-trained Texas Hold'em AI named "${player.name}". Your goal is to maximize EV across your ENTIRE RANGE at this decision point — not just for this specific hand. Think in ranges, assign this hand to bet or check range, then choose the action.
+
+## Game State
+- Phase           : ${phase}
+- Position        : ${position} — ${isIP ? 'IN POSITION (act last)' : 'OUT OF POSITION (act first)'}
 - Hole cards      : ${formatCards(holeCards)}
 - Hand strength   : ${handStrength}
 - Community cards : ${formatCards(state.communityCards)}
 - Board texture   : ${textureStr}
-- Stack           : ${player.chips} chips  |  Current bet this street: ${player.currentBet}
+- Stack           : ${player.chips} chips  |  Bet this street: ${player.currentBet}
 - Pot             : ${totalPot} chips  |  To call: ${toCall}  |  Big blind: ${state.bigBlind}
-- Min raise to    : ${minRaiseTotal} chips
-- Opponents active: ${numOpponents}${isMultiway ? ' (MULTIWAY — tighten ranges, reduce bluffs)' : ''}
+- Opponents active: ${numOpponents}${isMultiway ? ' (MULTIWAY)' : ''}
 
 ## Quantitative Metrics
-- Equity (Monte Carlo ${500} trials): ${equityPct}
-- Pot odds (if calling)             : ${potOddsStr}
-- SPR                               : ${sprNote}
-- Opponent bet vs pot               : ${betSizeNote}
+- Equity (Monte Carlo)      : ${equityPct}
+- Pot odds (if calling)     : ${potOddsStr}
+- Required equity to call   : ${requiredEquityPct}%${actualCall > 0 ? ` — your equity (${equityPct}) is ${parseFloat(equityPct) >= parseFloat(requiredEquityPct) ? 'ABOVE (call has +EV)' : 'BELOW (fold unless strong draw)'}` : ' — N/A'}
+- SPR                       : ${sprNote}
+- Opponent bet vs pot       : ${betSizeNote}
 
-## Bet Sizing Guide
-${sizingGuide}
+## Preflop Range Tendency (${position})
+${preflopRangeNote}
 
-## Range Analysis
-${rangeAnalysisLines.map((l) => `- ${l}`).join('\n')}
+## Board Texture & Range Advantage
+- Board texture     : ${textureStr}
+- Bet sizing guide  : ${sizingGuide}
+- Hero range        : ${heroRange.description}
+${opponentRanges.map((r, i) => `- ${activeOpponents[i]?.name ?? `Opp${i+1}`} range: ${r.description} (${r.position}, ${r.action})`).join('\n')}
+- Range advantage   : ${rangeAdvResult.rangeAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.rangeAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}
+- Nut advantage     : ${rangeAdvResult.nutAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.nutAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}
+- Summary           : ${rangeAdvResult.summary}
 
-## Strategic Context
-- Position strategy : ${posStrategy}
-- Range strategy    : ${rangeStrategyHint}${nutStrategyHint ? `\n- Nut advantage    : ${nutStrategyHint}` : ''}
-- Bluff frequency   : ${bluffRatio}${riverIpCheckNote ? `\n- River situation  : ${riverIpCheckNote}` : ''}
+## Hand Assignment (Check-Range vs Bet-Range)
+${handAssignmentNote}
+
+## Thin Value & Bluff Policy
+${thinValueBluffGuide}
+${riverIpCheckNote ? `\n## River Spot\n${riverIpCheckNote}` : ''}
 
 ## Active Opponents
 ${opponents || '  (none remaining)'}
@@ -926,16 +991,13 @@ ${opponents || '  (none remaining)'}
 ## Action History This Hand
 ${formatActionHistory(state.actionHistory, state.players)}
 
-## Decision Framework
-1. Compare equity (${equityPct}) vs pot odds (${potOddsStr}) — if equity < pot odds and no strong draw, fold.
-2. Apply SPR: low SPR → commit or fold; high SPR → implied odds matter.
-3. In position (BTN/CO): apply pressure; out of position (SB/BB): prefer check-raise over donk-bet.
-4. Large opponent bets (>2/3 pot) = polarised → re-raise or fold, rarely call.
-5. Use bet sizing guide above — choose SMALL/MEDIUM/LARGE/OVERBET and state the exact chip amount.
-6. Multiway: avoid bluffing unless you have strong fold equity. Bet for value or check.
-7. Range advantage (hero): increase bet frequency, double barrel more, bet for protection and value.
-8. Range disadvantage (villain): prefer check-raise and check-call; avoid wide donk-betting; trap with strong hands.
-9. River IP bluff: when hand is Tier5-Trash or Tier5-Overcard and you are IP (BTN/CO) with opponent checked, consider SMALL or MEDIUM bluff bet (~30-40% frequency) to balance your betting range and deny free showdowns to dominated hands. Use blockers to nuts as additional motivation.
+## Decision Steps (follow in order)
+1. RANGE CONTEXT: Does hero have range/nut advantage on this board? Use the Range Advantage section.
+2. HAND ASSIGNMENT: Assign THIS hand to bet-range or check-range using the Hand Assignment section above.
+3. SIZING: If betting, select size from the Bet Sizing Guide. Thin value → SMALL/MEDIUM. Strong value → MEDIUM/LARGE. Bluff → size for fold equity (SMALL/MEDIUM). Nut advantage → LARGE/OVERBET.
+4. MULTIWAY CHECK: If 2+ opponents, cut bluff frequency to near zero. Bet only for value.
+5. POSITION: IP → lean toward betting/raising to deny equity. OOP → prefer check-raise over donk-bet (unless range advantage).
+6. FINAL CHECK: Is the chosen action consistent with maximizing EV across the full range?
 
 ## Your Valid Actions
 ${validActions.map((a) => `  • ${a}`).join('\n')}
@@ -944,20 +1006,20 @@ ${validActions.map((a) => `  • ${a}`).join('\n')}
 Respond with ONLY a JSON object — no markdown, no extra text:
 {
   "action": "fold" | "check" | "call" | "raise" | "all-in",
-  "amount": <integer, REQUIRED when action is "raise" — total bet size this street, use sizing guide above>,
-  "reasoning": "REQUIRED: You MUST always provide reasoning. Never leave reasoning empty or null. Minimum 2 sentences explaining: (1) hand strength and equity, (2) the strategic reason for your action choice."
+  "amount": <integer, REQUIRED when action is "raise" — total bet size this street>,
+  "reasoning": "REQUIRED: 2-3 sentences covering (1) hand assignment to bet/check range and why, (2) range/board context, (3) chosen action and sizing rationale."
 }
 
 Constraints:
 - "check" only valid when toCall === 0
 - "raise" amount must be ≥ ${minRaiseTotal} and ≤ ${player.chips + player.currentBet}
 - If you cannot afford a raise, use "all-in" instead
-- IMPORTANT: always use action "raise" in the JSON even when opening the betting (no prior bet). The display layer converts it to "bet" automatically.
+- IMPORTANT: always use action "raise" in the JSON even when opening the betting (no prior bet this street).
 ${language === 'ja'
-  ? `- You MUST write the reasoning field in Japanese only. Do NOT use English in the reasoning field. Poker terms should be written in katakana (e.g. リバー、コール、レイズ、フロップ、ターン、チェック、フォールド、ブラフ、バリュー、ポット).`
-    + (canCheck ? `\n- This is an opening bet situation (no prior bet this street). In your reasoning, say "ベット" (bet) NOT "レイズ" (raise) when describing your action.` : '')
-  : `- You MUST write the reasoning field in English only. Do NOT use Japanese in the reasoning field.`
-    + (canCheck ? `\n- This is an opening bet situation (no prior bet this street). In your reasoning, say "bet" NOT "raise" when describing your action.` : '')
+  ? `- You MUST write the reasoning field in Japanese only. Do NOT use English in the reasoning field. Poker terms in katakana (e.g. レンジ、チェックレンジ、ベットレンジ、バリュー、ブラフ、ポジション、レンジアドバンテージ、ナッツアドバンテージ、ポットオッズ).`
+    + (canCheck ? `\n- This is an opening bet situation. In reasoning say "ベット" NOT "レイズ".` : '')
+  : `- You MUST write the reasoning field in English only.`
+    + (canCheck ? `\n- This is an opening bet situation. In reasoning say "bet" NOT "raise".` : '')
 }`
 }
 
