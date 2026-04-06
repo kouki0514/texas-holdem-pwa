@@ -1095,7 +1095,7 @@ export async function claudeDecideAction(
       const fallbackReasoning = language === 'en'
         ? 'Selected the best available action based on hand strength and pot odds.'
         : '手の強さとポットオッズに基づいて最善のアクションを選択しました。'
-      return { action: toCall === 0 ? 'check' : 'call', reasoning: fallbackReasoning }
+      return { action: (toCall === 0 ? 'check' : 'call') as ActionType, reasoning: fallbackReasoning }
     }
     return sanitise(raw, state, player, language)
   })()
