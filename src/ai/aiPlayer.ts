@@ -465,12 +465,7 @@ function getCFRStrategy(
 ): { fold: number; call: number; raise: number } | null {
   const histPart = actionHistory.length > 0 ? actionHistory : 'NONE'
   const key = `${pos}_${histPart}_${handKey}`
-  const strat = CFR_STRATEGY[key]
-  if (!strat) return null
-  // 均一戦略（未収束: 各値が0.333±0.01）はルールベースにフォールバック
-  const isUniform = Math.abs(strat.fold - strat.call) < 0.02 && Math.abs(strat.call - strat.raise) < 0.02
-  if (isUniform) return null
-  return strat
+  return CFR_STRATEGY[key] ?? null
 }
 
 /** CFR混合戦略からアクションをサンプリングする */

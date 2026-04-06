@@ -1003,17 +1003,21 @@ function sanitise(
 // JSON extraction (handles ```json fences, trailing commas, etc.)
 // ──────────────────────────────────────────────────────────────────────────────
 
-function extractJson(text: string): RawDecision {
-  // Strip markdown code fences
-  const stripped = text.replace(/```[a-z]*\n?/gi, '').trim()
+function extractJson(text: string): RawDecision | null {
+  try {
+    // Strip markdown code fences
+    const stripped = text.replace(/```[a-z]*\n?/gi, '').trim()
 
-  // Find the first {...} block
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('No JSON object found in response')
+    // Find the first {...} block
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    if (start === -1 || end === -1) return null
 
-  const jsonStr = stripped.slice(start, end + 1)
-  return JSON.parse(jsonStr) as RawDecision
+    const jsonStr = stripped.slice(start, end + 1)
+    return JSON.parse(jsonStr) as RawDecision
+  } catch {
+    return null
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1085,7 +1089,15 @@ export async function claudeDecideAction(
       throw new Error('No text content in Claude response')
     }
 
-    return sanitise(extractJson(textBlock.text!), state, player, language)
+    const raw = extractJson(textBlock.text!)
+    if (raw === null) {
+      const toCall = Math.max(0, state.currentBet - player.currentBet)
+      const fallbackReasoning = language === 'en'
+        ? 'Selected the best available action based on hand strength and pot odds.'
+        : '手の強さとポットオッズに基づいて最善のアクションを選択しました。'
+      return { action: toCall === 0 ? 'check' : 'call', reasoning: fallbackReasoning }
+    }
+    return sanitise(raw, state, player, language)
   })()
 
   const timeout = new Promise<never>((_, reject) =>
