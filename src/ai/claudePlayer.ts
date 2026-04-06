@@ -923,8 +923,8 @@ ${preflopRangeNote}
 - Bet sizing guide  : ${sizingGuide}
 - Hero range        : ${heroRange.description}
 ${opponentRanges.map((r, i) => `- ${activeOpponents[i]?.name ?? `Opp${i+1}`} range: ${r.description} (${r.position}, ${r.action})`).join('\n')}
-- Range advantage   : ${rangeAdvResult.rangeAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.rangeAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}
-- Nut advantage     : ${rangeAdvResult.nutAdvantage === 'hero' ? 'HERO ✓' : rangeAdvResult.nutAdvantage === 'villain' ? 'VILLAIN ✗' : 'NEUTRAL'}
+- Range advantage   : ${rangeAdvResult.rangeAdvantage === 'hero' ? 'HERO ✓ → bet more frequently, deny equity, double barrel' : rangeAdvResult.rangeAdvantage === 'villain' ? 'VILLAIN ✗ → check more, check-raise strong hands, avoid wide donk-bets' : 'NEUTRAL → mix bets/checks by hand strength and position'}
+- Nut advantage     : ${rangeAdvResult.nutAdvantage === 'hero' ? 'HERO ✓ → polarize sizing LARGE/OVERBET; opponent must call with weaker range' : rangeAdvResult.nutAdvantage === 'villain' ? 'VILLAIN ✗ → caution with medium hands facing large bets; check-raise bluffs less effective' : 'NEUTRAL → standard sizing applies'}
 - Summary           : ${rangeAdvResult.summary}
 
 ## Hand Assignment (Check-Range vs Bet-Range)
