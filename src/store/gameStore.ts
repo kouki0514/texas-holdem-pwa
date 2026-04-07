@@ -697,7 +697,15 @@ export function calcPosition(playerIndex: number, numPlayers: number, dealerInde
   const posMap: Record<number, string> = { 0: 'BTN', 1: 'SB', 2: 'BB' }
   if (rel in posMap) return posMap[rel]
   if (rel === numPlayers - 1) return 'CO'
-  return 'MP'
+  // 6max: rel=3→UTG, rel=4→HJ
+  // 5-handed: rel=3→UTG(HJ扱い), rel=4→CO(上で処理済み)
+  // 4-handed: rel=3→CO(上で処理済み)
+  if (numPlayers === 6) {
+    if (rel === 3) return 'UTG'
+    if (rel === 4) return 'HJ'
+  }
+  if (numPlayers === 5) return 'HJ'
+  return 'UTG'
 }
 
 /** Build a ReasoningEntry for any player action */

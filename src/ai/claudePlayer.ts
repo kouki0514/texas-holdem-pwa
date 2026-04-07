@@ -67,7 +67,14 @@ function getPositionLabel(
     1: 'SB (Small Blind)',
     2: 'BB (Big Blind)',
   }
-  return labels[pos] ?? `MP+${pos - 2}`
+  if (pos in labels) return labels[pos]!
+  if (pos === n - 1) return 'CO'
+  if (n === 6) {
+    if (pos === 3) return 'UTG'
+    if (pos === 4) return 'HJ'
+  }
+  if (n === 5) return 'HJ'
+  return 'UTG'
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
