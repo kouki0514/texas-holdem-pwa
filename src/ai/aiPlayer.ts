@@ -96,6 +96,7 @@ const BB_CALL_VS_EP: Record<string, boolean> = {
   'QTo':true,'Q9o':true,'Q8o':true,
   'JTo':true,'J9o':true,'J8o':true,
   'T9o':true,'T8o':true,'98o':true,'87o':true,
+  'A9s':true,'A8s':true,'A7s':true,'A6s':true,'A5s':true,'A4s':true,'A3s':true,'A2s':true,
   'Q4s':true,'J4s':true,'T3s':true,'95s':true,'85s':true,'74s':true,
 }
 
