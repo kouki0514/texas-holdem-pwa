@@ -169,14 +169,14 @@ const THREBET_RANGES: Record<string, Record<string, string>> = {
   'SB_VS_BTN': {
     'AA':'R','KK':'R','QQ':'R','JJ':'R','TT':'R',
     'AKs':'R','AQs':'R','AJs':'R','ATs':'R','A5s':'R','A4s':'R','A3s':'R','A2s':'R',
-    'KQs':'R','QJs':'R','JTs':'R','T9s':'R',
+    'KQs':'R','K9s':'R','QJs':'R','JTs':'R','T9s':'R',
     'AKo':'R','AQo':'R','AJo':'R','KQo':'R',
     '99':'C','88':'C','77':'C','66':'C',
     'KJs':'C','KTs':'C','QTs':'C','98s':'C','87s':'C','76s':'C',
   },
   'SB_VS_CO': {
     'AA':'R','KK':'R','QQ':'R','JJ':'R',
-    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R',
+    'AKs':'R','AQs':'R','AJs':'R','A5s':'R','A4s':'R','KQs':'R','K9s':'R',
     'AKo':'R','AQo':'R','AJo':'R',
     'TT':'C','99':'C','88':'C','77':'C',
     'ATs':'C','KJs':'C','KTs':'C','QJs':'C','QTs':'C','JTs':'C',
