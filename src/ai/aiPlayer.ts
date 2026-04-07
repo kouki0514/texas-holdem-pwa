@@ -180,7 +180,7 @@ const THREBET_RANGES: Record<string, Record<string, string>> = {
     'KQs':'R','K9s':'R','K5s':'R','K4s':'R','QJs':'R','Q9s':'R','JTs':'R','J8s':'R','T9s':'R','98s':'R',
     'AKo':'R','AQo':'R','AJo':'R',
     'TT':'C','99':'C','88':'C','77':'C',
-    'KJs':'C','KTs':'C','QTs':'C','JTs':'C',
+    'KJs':'C','KTs':'C','QTs':'C',
     'KQo':'C','KJo':'C',
   },
   'SB_VS_EP': {
