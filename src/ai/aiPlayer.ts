@@ -440,24 +440,65 @@ function toHandKey(c1: Card, c2: Card): string {
 
 /**
  * アクション履歴を "UTG_raise_HJ_fold_CO_call" 形式に変換する。
- * SB/BBのポスト(blind post)はアクションとして含めない。
+ * - SB/BBのポスト(blind post)はアクションとして含めない。
+ * - playerIndex を渡すと、自分より前にアクションすべきプレイヤーで
+ *   actionHistory に登場しないプレイヤーは fold として補完する。
+ *   これにより、アクション履歴が空の HJ は "UTG_fold" を返す。
  */
-function buildActionHistory(state: GameState): string {
+function buildActionHistory(state: GameState, playerIndex?: number): string {
   const n = state.players.length
-  const parts: string[] = []
+
+  // 実際のアクション履歴からsb/bbポストを除いたマップ (playerId → act) を構築
+  const actedMap = new Map<string, string>()
   for (const a of state.actionHistory) {
-    // blind post は除外（金額がBB以下のcallはポスト扱いしない — ここでは action種別で除外）
     if ((a.action as string) === 'sb' || (a.action as string) === 'bb') continue
-    const idx = state.players.findIndex(p => p.id === a.playerId)
-    if (idx === -1) continue
-    const pos = getPosition(idx, state.dealerIndex, n)
     const act = a.action === 'all-in' ? 'raise' : a.action
+    // 同一プレイヤーの最後のアクションで上書き（raise後callなどは起きないがガード）
+    actedMap.set(a.playerId, act)
+  }
+
+  if (playerIndex === undefined) {
+    // playerIndex 未指定時: 従来通りアクション順に列挙
+    const parts: string[] = []
+    for (const a of state.actionHistory) {
+      if ((a.action as string) === 'sb' || (a.action as string) === 'bb') continue
+      const idx = state.players.findIndex(p => p.id === a.playerId)
+      if (idx === -1) continue
+      const pos = getPosition(idx, state.dealerIndex, n)
+      const act = a.action === 'all-in' ? 'raise' : a.action
+      parts.push(`${pos}_${act}`)
+    }
+    return parts.join('_')
+  }
+
+  // プリフロップの行動順: dealerの次(UTG相当)から時計回りに playerIndex の手前まで
+  // rel=0はBTN、rel=3がUTG(6人卓)。行動順はrel=3→4→5→1→2→0(BTN最後)だが、
+  // プリフロップはUTG(rel=3)が最初で BB(rel=2)が最後。
+  // 行動順インデックス: seat i の行動順 = (i - dealerIndex - 1 + n) % n
+  //   BTN(rel=0) → 行動順 n-1(最後), UTG(rel=3) → 行動順 2 など
+  // 自分(playerIndex)より行動順が早いプレイヤーを列挙する
+  const myOrder = (playerIndex - state.dealerIndex - 1 + n) % n
+
+  // (seat_index, action_order) のペアを行動順でソート
+  const seated = state.players.map((p, idx) => ({
+    idx,
+    id: p.id,
+    order: (idx - state.dealerIndex - 1 + n) % n,
+  })).filter(s => s.order < myOrder)
+    .sort((a, b) => a.order - b.order)
+
+  const parts: string[] = []
+  for (const s of seated) {
+    const pos = getPosition(s.idx, state.dealerIndex, n)
+    const act = actedMap.get(s.id) ?? 'fold'
     parts.push(`${pos}_${act}`)
   }
+
+  // UTG_NONE (自分がUTGで誰も行動していない) の場合は空文字列を返す → NONE扱い
   return parts.join('_')
 }
 
-/** CFR戦略テーブルを参照して混合戦略を返す。キー未発見時・未収束時は null。*/
+/** CFR戦略テーブルを参照して混合戦略を返す。キー未発見時は null。*/
 function getCFRStrategy(
   pos: string,
   actionHistory: string,
@@ -528,7 +569,7 @@ function preflopAction(
   const cards = player.holeCards
   if (cards && cards.length >= 2 && cards[0] && cards[1]) {
     const handKey = toHandKey(cards[0], cards[1])
-    const actionHist = buildActionHistory(state)
+    const actionHist = buildActionHistory(state, playerIndex)
     const cfrStrat = getCFRStrategy(myPos, actionHist, handKey)
     if (cfrStrat !== null) {
       // difficultyによるノイズ: easy/mediumは少しランダム性を加える
