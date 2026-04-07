@@ -761,10 +761,60 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   const myOrder = postflopOrder(player)
   const isIP = activePlayers2.every((p) => postflopOrder(p) <= myOrder)
 
-  // ── River IP + opponent checked: 3-way decision note ────────────────────────
+  // ── Aggressor / checked-back detection ──────────────────────────────────────
   const isRiver = state.phase === 'river'
-  const opponentChecked = isRiver && toCall === 0 &&
+  const isFlop  = state.phase === 'flop'
+  const isTurn  = state.phase === 'turn'
+
+  // Hero is preflop aggressor if the last raise in actionHistory belongs to hero
+  const preflopRaises = state.actionHistory.filter(
+    (a) => a.action === 'raise' || a.action === 'all-in'
+  )
+  const isPreflopAggressor = preflopRaises.length > 0 &&
+    preflopRaises[preflopRaises.length - 1]?.playerId === player.id
+
+  // Hero checked back on the flop (IP aggressor who checked behind on flop)
+  // Detected as: hero is preflop aggressor + current street is turn/river +
+  // actionHistory contains hero's 'check' action (no bet on flop)
+  const heroCheckedFlop = isPreflopAggressor && (isTurn || isRiver) &&
+    state.actionHistory.some((a) => a.action === 'check' && a.playerId === player.id)
+
+  // Opponent checked on current street (hero faces a check → hero has initiative)
+  const opponentCheckedThisStreet = toCall === 0 &&
     state.actionHistory.some((a) => a.action === 'check' && a.playerId !== player.id)
+
+  // Betting situation label
+  const bettingSituation: string = (() => {
+    if (state.phase === 'preflop') return 'PREFLOP'
+    if (!canCheck) {
+      // Facing a bet
+      return isPreflopAggressor
+        ? 'FACING BET (hero was preflop aggressor — opponent is leading/donk-betting or 3-betting)'
+        : 'FACING BET (hero was preflop caller — opponent continues as aggressor)'
+    }
+    // Hero can check or bet
+    if (isPreflopAggressor && !heroCheckedFlop) {
+      if (isFlop) return 'C-BET SPOT: Hero is preflop aggressor, first to act on flop. Standard c-bet or check decision.'
+      if (isTurn) return 'DOUBLE BARREL SPOT: Hero is preflop aggressor, barreling the turn. High fold equity with good boards; give up on bad run-outs.'
+      if (isRiver) return 'TRIPLE BARREL SPOT: Hero is preflop aggressor on river. Triple barrel only with strong value or high fold-equity bluffs.'
+    }
+    if (isPreflopAggressor && heroCheckedFlop) {
+      if (isTurn) return 'DELAYED C-BET SPOT: Hero checked back flop (aggressor), now betting turn. Range is uncapped; strong credibility for value bets.'
+      if (isRiver) return 'DELAYED C-BET SPOT (river): Hero checked flop and turn, now acting on river. Betting here looks very strong — polarize.'
+    }
+    if (!isPreflopAggressor && opponentCheckedThisStreet) {
+      if (isFlop) return 'PROBE BET OPPORTUNITY (flop): Opponent (preflop aggressor) checked — hero can probe with medium-strength hands and draws. Avoid wide donk-betting on separate streets.'
+      if (isTurn) return 'PROBE BET OPPORTUNITY (turn): Aggressor checked flop AND turn — range is weakened. Probe with a wide range; strong hands, draws, and bluffs all viable.'
+      if (isRiver) return 'PROBE BET OPPORTUNITY (river): Aggressor checked through — polarized probe (strong value or bluff). Medium hands often check behind.'
+    }
+    if (!isPreflopAggressor && !opponentCheckedThisStreet && canCheck) {
+      return 'OOP CHECK: Hero is preflop caller and acts first. Check-raise is the primary weapon; donk-bet only with range advantage and clear value/semi-bluff hands.'
+    }
+    return 'STANDARD SPOT'
+  })()
+
+  // River IP + opponent checked note (existing logic, now using updated vars)
+  const opponentChecked = isRiver && toCall === 0 && opponentCheckedThisStreet
   const riverIpCheckNote = isRiver && isIP && opponentChecked
     ? `RIVER IP + OPPONENT CHECKED: You have exactly 3 options — (A) Value bet (SMALL/MEDIUM/LARGE) with strong made hand, (B) Bluff bet (SMALL/MEDIUM) to fold out weak hands you can't beat, (C) Check behind for free showdown with medium-strength hands. Do NOT consider call or fold here — bet or check only.`
     : null
@@ -896,6 +946,19 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   ].join(' ')
 
   return `You are a GTO-trained Texas Hold'em AI named "${player.name}". Your goal is to maximize EV across your ENTIRE RANGE at this decision point — not just for this specific hand. Think in ranges, assign this hand to bet or check range, then choose the action.
+
+## Betting Situation
+- Situation       : ${bettingSituation}
+- Preflop role    : ${isPreflopAggressor ? 'AGGRESSOR (last raiser preflop)' : 'CALLER / DEFENDER (preflop caller or BB)'}${heroCheckedFlop ? ' — checked back on flop' : ''}
+
+## Betting Term Definitions
+- **C-bet (continuation bet)**: Preflop aggressor bets on the flop after checking or being first to act. Standard aggressive play.
+- **Double barrel**: Preflop aggressor bets turn after c-betting flop. Requires good board run-out or credible range.
+- **Triple barrel**: Preflop aggressor bets river after betting flop and turn. Highly polarized — strong value or high fold-equity bluff only.
+- **Delayed c-bet**: Preflop aggressor checks flop, then bets turn or river. Range appears uncapped; often used as a trap or on boards that improve the aggressor's range on later streets.
+- **Donk bet**: Preflop CALLER bets into the preflop AGGRESSOR on the flop. Generally weak in theory — avoid unless: (a) board strongly favors caller's range, (b) hand benefits from immediate protection, (c) opponent's c-bet frequency is very low.
+- **Probe bet**: Preflop CALLER bets into preflop AGGRESSOR on the TURN or RIVER after aggressor checked the previous street. Legitimate play — aggressor's range is weakened after checking; probe with draws, medium hands, and polarized bluffs.
+- **Check-raise**: OOP player checks then raises after opponent bets. Primary OOP weapon for building the pot with strong hands and as a bluff with draws.
 
 ## Game State
 - Phase           : ${phase}
