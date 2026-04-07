@@ -119,8 +119,7 @@ const COLD_CALL_VS_EP: Record<string, boolean> = {
   'JTs':true,'J9s':true,
   'T9s':true,'T8s':true,'98s':true,'87s':true,'76s':true,'65s':true,
   'AJo':true,'ATo':true,'A9o':true,
-  'KQo':true,'KJo':true,'KTo':true,
-  'QJo':true,'QTo':true,'JTo':true,
+  'KQo':true,'KJo':true,
 }
 
 const COLD_CALL_VS_CO: Record<string, boolean> = {
@@ -131,8 +130,7 @@ const COLD_CALL_VS_CO: Record<string, boolean> = {
   'JTs':true,'J9s':true,'J8s':true,
   'T9s':true,'T8s':true,'98s':true,'97s':true,'87s':true,'86s':true,'76s':true,'65s':true,'54s':true,
   'AJo':true,'ATo':true,'A9o':true,'A8o':true,
-  'KQo':true,'KJo':true,'KTo':true,
-  'QJo':true,'QTo':true,'JTo':true,
+  'KQo':true,'KJo':true,
 }
 
 // ── 3-bet ranges ──────────────────────────────────────────────────────────────
@@ -296,7 +294,7 @@ function effectiveStrength(player: Player, community: Card[]): number {
   if (fdOuts >= 4) drawEquity += 9 / remaining
   if (sdType === 'oesd') drawEquity += 8 / remaining
   if (sdType === 'gutshot') drawEquity += 4 / remaining
-  return Math.min(1.0, made + drawEquity * 0.8)
+  return Math.min(1.0, made + drawEquity * 0.6)
 }
 
 function isInPosition(player: Player, state: GameState): boolean {
