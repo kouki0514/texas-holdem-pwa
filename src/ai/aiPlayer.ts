@@ -66,6 +66,8 @@ const BB_CALL_VS_BTN: Record<string, boolean> = {
   'T9o':true,'T8o':true,'T7o':true,
   '98o':true,'97o':true,
   '87o':true,'76o':true,
+  // Axs (not in 3-bet range: A6s-A9s fill the gap between ATs+ and A2s-A5s bluff 3-bets)
+  'A9s':true,'A8s':true,'A7s':true,'A6s':true,
   // Small suited
   'K4s':true,'K3s':true,'K2s':true,
   'Q6s':true,'Q5s':true,'Q4s':true,'Q3s':true,'Q2s':true,
@@ -81,6 +83,8 @@ const BB_CALL_VS_CO: Record<string, boolean> = {
   'JTo':true,'J9o':true,'J8o':true,'J7o':true,
   'T9o':true,'T8o':true,'T7o':true,
   '98o':true,'97o':true,'87o':true,'76o':true,
+  // Axs (A6s-A8s: not in 3-bet range vs CO; A9s/ATs are in THREBET_RANGES BB_VS_CO as 'C')
+  'A8s':true,'A7s':true,'A6s':true,
   'Q5s':true,'Q4s':true,'Q3s':true,'J5s':true,'J4s':true,'T4s':true,'T3s':true,
   '95s':true,'85s':true,'84s':true,'74s':true,'63s':true,'53s':true,
 }
