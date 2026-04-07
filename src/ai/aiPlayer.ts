@@ -74,6 +74,7 @@ const BB_CALL_VS_BTN: Record<string, boolean> = {
   'J6s':true,'J5s':true,'J4s':true,'J3s':true,'J2s':true,
   'T5s':true,'T4s':true,'T3s':true,'T2s':true,
   '95s':true,'94s':true,'85s':true,'84s':true,'74s':true,'73s':true,'63s':true,'52s':true,'42s':true,'32s':true,
+  '97s':true,'96s':true,'86s':true,'75s':true,'64s':true,'53s':true,
 }
 
 const BB_CALL_VS_CO: Record<string, boolean> = {
