@@ -588,6 +588,7 @@ function preflopAction(
         : cfrStrat
       const canRaise = raiseCount < 4
       const sampled = sampleCFRAction(noisedStrat, canCheck, canRaise)
+      console.log(`[CFR HIT] pos=${myPos} hand=${handKey} hist=${actionHist} fold=${cfrStrat.fold.toFixed(3)} call=${cfrStrat.call.toFixed(3)} raise=${cfrStrat.raise.toFixed(3)} sampled=${sampled}`)
 
       if (sampled === 'raise') {
         // raiseサイズはルールベースのサイジングを流用

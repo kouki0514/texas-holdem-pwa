@@ -976,7 +976,7 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
 - Board texture   : ${textureStr}
 - Stack           : ${player.chips} chips  |  Bet this street: ${player.currentBet}
 - Pot             : ${totalPot} chips  |  To call: ${toCall}  |  Big blind: ${state.bigBlind}
-- Opponents active: ${numOpponents}${isMultiway ? ' (MULTIWAY)' : ''}
+- Opponents active: ${numOpponents}${isMultiway ? ` (MULTIWAY — raise equity threshold: each opponent needs ~${(potOdds * 100 * (numOpponents > 2 ? 1.3 : 1.15)).toFixed(0)}% equity to continue; bluff frequency drops to near-zero)` : ' (HEADS-UP — full GTO bluff/value polarization applies)'}
 
 ## Quantitative Metrics
 - Equity (Monte Carlo)      : ${equityPct}
@@ -1000,6 +1000,19 @@ ${opponentRanges.map((r, i) => `- ${activeOpponents[i]?.name ?? `Opp${i+1}`} ran
 ## Hand Assignment (Check-Range vs Bet-Range)
 ${handAssignmentNote}
 
+## Position Bet Frequency Guide
+${isIP
+  ? `IN POSITION (IP): You act LAST — a structural advantage. Apply elevated bet frequency:
+- Flop IP: Bet 55-70% of hands when checked to (c-bet or probe). Thin value bets are highly profitable; opponents must call without knowing your next action.
+- Turn IP: Barrel 50-65% of your flop-betting range on good run-outs. IP double barrels have highest fold equity.
+- River IP (opponent checked): Bet 60-75% — include all value hands AND high fold-equity bluffs. Checking back is only correct with pure bluff-catchers (medium equity, no fold equity).
+- IP advantage summary: Lean toward BETTING when equity ≥ 40% and no significant strength indicator from opponent.`
+  : `OUT OF POSITION (OOP): You act FIRST — a structural disadvantage. Apply conservative bet frequency:
+- Flop OOP: Bet (donk/probe) only with clear range advantage OR strong protection need. Default: CHECK and react.
+- Turn OOP: Check-raise is the primary weapon. Bet only as probe if aggressor showed weakness (checked flop).
+- River OOP: Polarize — bet strong value or credible bluffs. Check all medium-strength hands for pot control.
+- OOP disadvantage: Prefer CHECK → let opponent bet → check-raise or call. Avoid inflating pot OOP without strong equity.`}
+
 ## Thin Value & Bluff Policy
 ${thinValueBluffGuide}
 ${riverIpCheckNote ? `\n## River Spot\n${riverIpCheckNote}` : ''}
@@ -1015,7 +1028,7 @@ ${formatActionHistory(state.actionHistory, state.players)}
 2. HAND ASSIGNMENT: Assign THIS hand to bet-range or check-range using the Hand Assignment section above.
 3. SIZING: If betting, select size from the Bet Sizing Guide. Thin value → SMALL/MEDIUM. Strong value → MEDIUM/LARGE. Bluff → size for fold equity (SMALL/MEDIUM). Nut advantage → LARGE/OVERBET.
 4. MULTIWAY CHECK: If 2+ opponents, cut bluff frequency to near zero. Bet only for value.
-5. POSITION: IP → lean toward betting/raising to deny equity. OOP → prefer check-raise over donk-bet (unless range advantage).
+5. POSITION: IP → bet frequency 55-70% flop, 50-65% turn, 60-75% river (see Position Bet Frequency Guide). OOP → default CHECK, use check-raise; donk/probe only with range advantage or after opponent showed weakness.
 6. FINAL CHECK: Is the chosen action consistent with maximizing EV across the full range?
 
 ## Your Valid Actions
