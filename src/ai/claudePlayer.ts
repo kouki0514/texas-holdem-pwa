@@ -725,15 +725,25 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
   // potBeforeBet = pot before opponent's bet was made.
   // totalPot already includes the opponent's currentBet, so subtract it to get pre-bet pot.
   let betSizeNote = 'N/A'
+  let betSizeLabel = 'N/A'
   let opponentBetRatio = 0
   if (state.currentBet > 0 && totalPot > 0) {
     const potBeforeBet = Math.max(1, totalPot - state.currentBet)
     opponentBetRatio = toCall / potBeforeBet
     const ratio = state.currentBet / potBeforeBet
-    if (ratio <= 0.4) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — small bet: wide continuing range, re-raise bluffs viable`
-    else if (ratio <= 0.6) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — half-pot: balanced range; need ~25% equity to call`
-    else if (ratio <= 0.85) betSizeNote = `${(ratio * 100).toFixed(0)}% pot — 2/3 pot: polarised range; need ~32% equity`
-    else betSizeNote = `${(ratio * 100).toFixed(0)}% pot — pot-size+: very polarised; need ~40%+ equity, fold marginal hands`
+    if (ratio <= 0.4) {
+      betSizeLabel = `Opponent bet ${(ratio * 100).toFixed(0)}% pot (small bet)`
+      betSizeNote = `${(ratio * 100).toFixed(0)}% pot — small bet: wide continuing range, re-raise bluffs viable`
+    } else if (ratio <= 0.6) {
+      betSizeLabel = `Opponent bet ${(ratio * 100).toFixed(0)}% pot (half pot)`
+      betSizeNote = `${(ratio * 100).toFixed(0)}% pot — half-pot: balanced range; need ~25% equity to call`
+    } else if (ratio <= 0.85) {
+      betSizeLabel = `Opponent bet ${(ratio * 100).toFixed(0)}% pot (2/3 pot)`
+      betSizeNote = `${(ratio * 100).toFixed(0)}% pot — 2/3 pot: polarised range; need ~32% equity`
+    } else {
+      betSizeLabel = `Opponent bet ${(ratio * 100).toFixed(0)}% pot (pot-size+)`
+      betSizeNote = `${(ratio * 100).toFixed(0)}% pot — pot-size+: very polarised; need ~40%+ equity, fold marginal hands`
+    }
   }
 
   // ── Monte Carlo equity (uses opponentBetRatio for range-weighted sampling) ──
@@ -976,6 +986,7 @@ function buildSystemPrompt(state: GameState, player: Player, language: 'ja' | 'e
 - Board texture   : ${textureStr}
 - Stack           : ${player.chips} chips  |  Bet this street: ${player.currentBet}
 - Pot             : ${totalPot} chips  |  To call: ${toCall}  |  Big blind: ${state.bigBlind}
+- Opponent bet    : ${betSizeLabel}
 - Opponents active: ${numOpponents}${isMultiway ? ` (MULTIWAY — raise equity threshold: each opponent needs ~${(potOdds * 100 * (numOpponents > 2 ? 1.3 : 1.15)).toFixed(0)}% equity to continue; bluff frequency drops to near-zero)` : ' (HEADS-UP — full GTO bluff/value polarization applies)'}
 
 ## Quantitative Metrics
@@ -1023,13 +1034,17 @@ ${opponents || '  (none remaining)'}
 ## Action History This Hand
 ${formatActionHistory(state.actionHistory, state.players)}
 
+## Raise Discipline vs Large Bets
+- Facing a large bet (>50% pot) on a coordinated board, raising requires near-nuts or strong blockers; with two-pair or trips on a straight/flush-completed board, prefer call over raise unless you hold the nuts.
+
 ## Decision Steps (follow in order)
 1. RANGE CONTEXT: Does hero have range/nut advantage on this board? Use the Range Advantage section.
 2. HAND ASSIGNMENT: Assign THIS hand to bet-range or check-range using the Hand Assignment section above.
 3. SIZING: If betting, select size from the Bet Sizing Guide. Thin value → SMALL/MEDIUM. Strong value → MEDIUM/LARGE. Bluff → size for fold equity (SMALL/MEDIUM). Nut advantage → LARGE/OVERBET.
 4. MULTIWAY CHECK: If 2+ opponents, cut bluff frequency to near zero. Bet only for value.
 5. POSITION: IP → bet frequency 55-70% flop, 50-65% turn, 60-75% river (see Position Bet Frequency Guide). OOP → default CHECK, use check-raise; donk/probe only with range advantage or after opponent showed weakness.
-6. FINAL CHECK: Is the chosen action consistent with maximizing EV across the full range?
+6. RAISE DISCIPLINE: If facing a large bet (>50% pot) on a coordinated board, apply the Raise Discipline policy above before deciding to raise.
+7. FINAL CHECK: Is the chosen action consistent with maximizing EV across the full range?
 
 ## Your Valid Actions
 ${validActions.map((a) => `  • ${a}`).join('\n')}
