@@ -59,7 +59,7 @@ const OPEN_RANGES: Record<string, Record<string, string>> = {
 // ── BB defend (call) ranges ───────────────────────────────────────────────────
 const BB_CALL_VS_BTN: Record<string, boolean> = {
   // Offsuit broadways & Ax
-  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
+  'AQo':true,'AJo':true,'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
   'KTo':true,'K9o':true,'K8o':true,'K7o':true,'K6o':true,
   'QTo':true,'Q9o':true,'Q8o':true,'Q7o':true,
   'JTo':true,'J9o':true,'J8o':true,'J7o':true,'J6o':true,
@@ -78,7 +78,7 @@ const BB_CALL_VS_BTN: Record<string, boolean> = {
 }
 
 const BB_CALL_VS_CO: Record<string, boolean> = {
-  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
+  'AQo':true,'AJo':true,'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
   'KTo':true,'K9o':true,'K8o':true,'K7o':true,
   'QTo':true,'Q9o':true,'Q8o':true,
   'JTo':true,'J9o':true,'J8o':true,'J7o':true,
@@ -92,7 +92,7 @@ const BB_CALL_VS_CO: Record<string, boolean> = {
 
 const BB_CALL_VS_EP: Record<string, boolean> = {
   // vs UTG/HJ open — tighter
-  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,
+  'ATo':true,'A9o':true,'A8o':true,'A7o':true,'A6o':true,'A5o':true,'A4o':true,'A3o':true,'A2o':true,
   'KTo':true,'K9o':true,'K8o':true,
   'QTo':true,'Q9o':true,'Q8o':true,
   'JTo':true,'J9o':true,'J8o':true,
